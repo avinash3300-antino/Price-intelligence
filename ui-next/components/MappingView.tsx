@@ -129,12 +129,23 @@ export function MappingView({ initialProducts }: Props) {
     return Number.isFinite(n) ? n : null;
   }, [searchParams]);
 
+  // Prefer explicit URL params → the selected product's location → then fall
+  // back to UAE / Dubai when the catalog contains any UAE-Dubai product.
+  // Rayna's PoC is UAE-first, so this puts users on productive filters at
+  // first paint instead of an empty state.
+  const hasUaeDubai = initialProducts.some(
+    (p) =>
+      p.product.country === "United Arab Emirates" &&
+      p.product.city === "Dubai",
+  );
   const initialCountry =
     searchParams?.get("country") ??
     initialProduct?.product.country ??
-    null;
+    (hasUaeDubai ? "United Arab Emirates" : null);
   const initialCity =
-    searchParams?.get("city") ?? initialProduct?.product.city ?? null;
+    searchParams?.get("city") ??
+    initialProduct?.product.city ??
+    (hasUaeDubai ? "Dubai" : null);
   const initialDate = (() => {
     const raw = searchParams?.get("date");
     if (raw && /^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
