@@ -3,23 +3,23 @@ import { Check, X, Equal } from "lucide-react";
 const STYLES = {
   identical: {
     label: "identical",
-    bg: "#E8F5EC",
-    text: "#197A45",
-    border: "#BFE3CB",
+    bg: "#FFF7ED",
+    text: "#047857",
+    border: "#A7F3D0",
     icon: Check,
   },
   near: {
     label: "near",
-    bg: "#FBF1DE",
-    text: "#9A6510",
-    border: "#EFD8A6",
+    bg: "#FEF3C7",
+    text: "#92400E",
+    border: "#FCD34D",
     icon: Equal,
   },
   different: {
     label: "different",
-    bg: "#FBEAE8",
-    text: "#B5342C",
-    border: "#F1C7C2",
+    bg: "#FEE2E2",
+    text: "#B91C1C",
+    border: "#FCA5A5",
     icon: X,
   },
 } as const;

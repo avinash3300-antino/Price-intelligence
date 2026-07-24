@@ -37,7 +37,7 @@ export function Topbar({ title, subtitle }: Props) {
         <div className="flex items-center bg-[#F2F3F5] border border-[#E7E8EB] rounded-[9px] p-[3px] gap-0.5">
           <button
             type="button"
-            className="flex items-center gap-[7px] px-[11px] py-[5px] rounded-[7px] text-[12.5px] font-semibold bg-white text-[#0E6F6A] shadow-sm transition-colors"
+            className="flex items-center gap-[7px] px-[11px] py-[5px] rounded-[7px] text-[12.5px] font-semibold bg-white text-[#EA580C] shadow-sm transition-colors"
           >
             <span className="text-[13px]">🇦🇪</span>
             UAE · AED
@@ -71,7 +71,7 @@ export function Topbar({ title, subtitle }: Props) {
           </button>
         </div>
 
-        <div className="w-[32px] h-[32px] rounded-full bg-gradient-to-br from-[#3A8C85] to-[#0E6F6A] text-white flex items-center justify-center text-[12.5px] font-semibold">
+        <div className="w-[32px] h-[32px] rounded-full bg-gradient-to-br from-[#F59E0B] to-[#EA580C] text-white flex items-center justify-center text-[12.5px] font-semibold">
           AK
         </div>
       </div>

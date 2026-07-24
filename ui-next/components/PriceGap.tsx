@@ -36,8 +36,8 @@ export function PriceGap({
     Arrow = Minus;
     signLabel = "match";
   } else if (we_cheaper) {
-    color = "#197A45";
-    bg = "#E8F5EC";
+    color = "#C2410C";
+    bg = "#FFF7ED";
     Arrow = ArrowUp;
     signLabel = "we win";
   } else {

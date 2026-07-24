@@ -115,7 +115,7 @@ export function AddCompetitorByUrlModal({
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-[#F1F2F4]">
           <div>
             <div className="text-[15px] font-semibold text-[#1F2127] flex items-center gap-2">
-              <LinkIcon className="w-4 h-4 text-[#0E6F6A]" />
+              <LinkIcon className="w-4 h-4 text-[#EA580C]" />
               Add competitor by URL
             </div>
             <div className="text-[12px] text-[#8A8F98] mt-1">
@@ -204,7 +204,7 @@ function InputForm({
             if (e.key === "Enter") onSubmit();
           }}
           placeholder="https://www.viator.com/tours/…"
-          className="mt-1 w-full px-3 py-2 rounded-[9px] border border-[#E2E3E7] focus:border-[#0E6F6A] focus:outline-none text-[13px] font-mono text-[#1F2127] placeholder:text-[#B0B4BB]"
+          className="mt-1 w-full px-3 py-2 rounded-[9px] border border-[#E2E3E7] focus:border-[#FDBA74] focus:outline-none text-[13px] font-mono text-[#1F2127] placeholder:text-[#B0B4BB]"
           autoFocus
         />
       </label>
@@ -217,14 +217,14 @@ function InputForm({
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="e.g. Sourced from partner ping"
-          className="mt-1 w-full px-3 py-2 rounded-[9px] border border-[#E2E3E7] focus:border-[#0E6F6A] focus:outline-none text-[13px] text-[#1F2127] placeholder:text-[#B0B4BB]"
+          className="mt-1 w-full px-3 py-2 rounded-[9px] border border-[#E2E3E7] focus:border-[#FDBA74] focus:outline-none text-[13px] text-[#1F2127] placeholder:text-[#B0B4BB]"
         />
       </label>
       <div className="flex justify-end gap-2 pt-1">
         <button
           type="button"
           onClick={onSubmit}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[9px] text-[13px] font-semibold bg-[#0E6F6A] text-white hover:bg-[#0B5853] transition-colors"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[9px] text-[13px] font-semibold bg-[#FED7AA] text-black hover:bg-[#FDBA74] transition-colors"
         >
           Fetch & extract
           <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.5} />
@@ -268,7 +268,7 @@ function PasteFallback({
           onChange={(e) => setPasted(e.target.value)}
           rows={10}
           placeholder="Paste the product page's description, inclusions, price, etc."
-          className="mt-1 w-full px-3 py-2 rounded-[9px] border border-[#E2E3E7] focus:border-[#0E6F6A] focus:outline-none text-[12.5px] text-[#1F2127] placeholder:text-[#B0B4BB] font-mono leading-relaxed resize-y"
+          className="mt-1 w-full px-3 py-2 rounded-[9px] border border-[#E2E3E7] focus:border-[#FDBA74] focus:outline-none text-[12.5px] text-[#1F2127] placeholder:text-[#B0B4BB] font-mono leading-relaxed resize-y"
           autoFocus
         />
       </label>
@@ -277,7 +277,7 @@ function PasteFallback({
           type="button"
           disabled={pasted.trim().length < 200}
           onClick={onSubmit}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[9px] text-[13px] font-semibold bg-[#0E6F6A] text-white hover:bg-[#0B5853] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[9px] text-[13px] font-semibold bg-[#FED7AA] text-black hover:bg-[#FDBA74] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           title={
             pasted.trim().length < 200
               ? "Paste at least ~200 characters"
@@ -334,7 +334,7 @@ function ResultView({
         <button
           type="button"
           onClick={onDone}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[9px] text-[13px] font-semibold bg-[#0E6F6A] text-white hover:bg-[#0B5853] transition-colors"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[9px] text-[13px] font-semibold bg-[#FED7AA] text-black hover:bg-[#FDBA74] transition-colors"
         >
           Done
         </button>

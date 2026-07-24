@@ -47,7 +47,7 @@ export function MappedDatePill({ value }: { value: string }) {
     <button
       type="button"
       onClick={openPicker}
-      className="relative inline-flex items-center gap-2 px-3.5 py-2 rounded-[10px] text-[13px] font-semibold border border-[#9FD4CE] bg-[#F2FAF9] text-[#0E6F6A] hover:bg-white transition-all cursor-pointer"
+      className="relative inline-flex items-center gap-2 px-3.5 py-2 rounded-[10px] text-[13px] font-semibold border border-[#F59E0B] bg-[#FFF7ED] text-[#EA580C] hover:bg-white transition-all cursor-pointer"
     >
       <Calendar className="w-3.5 h-3.5" />
       <span>{isToday ? `${display} (today)` : display}</span>

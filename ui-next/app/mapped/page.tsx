@@ -22,7 +22,7 @@ function priceGap(rayna: number | null, comp: number | null): React.ReactNode {
     return <span className="text-[#5C6069] text-xs">match</span>;
   if (diff > 0)
     return (
-      <span className="tnum text-[#197A45] font-semibold text-xs">
+      <span className="tnum text-[#C2410C] font-semibold text-xs">
         +{pct.toFixed(1)}%
       </span>
     );
@@ -87,7 +87,7 @@ export default async function MappedPage({
               <span className="tnum text-[#3D424B] font-semibold">{items.length}</span>{" "}
               {items.length === 1 ? "mapping" : "mappings"} ready to compare against the
               market for{" "}
-              <span className="text-[#0E6F6A] font-semibold">{dateLabel}</span>
+              <span className="text-[#EA580C] font-semibold">{dateLabel}</span>
             </p>
           </div>
           <MappedDatePill value={date} />
@@ -103,7 +103,7 @@ export default async function MappedPage({
             </div>
             <Link
               href="/"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[10px] text-[13px] font-semibold bg-[#0E6F6A] text-white hover:bg-[#0B5853] transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[10px] text-[13px] font-semibold bg-[#FED7AA] text-black hover:bg-[#FDBA74] transition-colors"
             >
               Go to mapping
             </Link>
@@ -124,7 +124,7 @@ export default async function MappedPage({
                   </div>
                   <Link
                     href={`/?productId=${productId}`}
-                    className="text-[12px] font-semibold text-[#0E6F6A] hover:text-[#0B5853]"
+                    className="text-[12px] font-semibold text-[#EA580C] hover:text-[#C2410C]"
                   >
                     Open in mapping →
                   </Link>
@@ -158,7 +158,7 @@ export default async function MappedPage({
                           href={m.listing_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-[12.5px] font-mono text-[#3D424B] hover:text-[#0E6F6A] inline-flex items-center gap-1.5 truncate"
+                          className="text-[12.5px] font-mono text-[#3D424B] hover:text-[#EA580C] inline-flex items-center gap-1.5 truncate"
                         >
                           {m.seller_domain}
                           <ExternalLink className="w-3 h-3 opacity-50 shrink-0" />

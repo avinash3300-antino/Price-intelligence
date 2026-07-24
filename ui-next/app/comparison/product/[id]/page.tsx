@@ -42,7 +42,7 @@ export default async function ProductPage(props: {
         </div>
 
         <div className="flex items-start gap-3.5 mb-6">
-          <div className="w-[52px] h-[52px] rounded-[13px] bg-[#F2FAF9] border border-[#DCEFEC] flex items-center justify-center text-2xl">
+          <div className="w-[52px] h-[52px] rounded-[13px] bg-[#FFF7ED] border border-[#3D424B] flex items-center justify-center text-2xl">
             🌆
           </div>
           <div className="flex-1">
@@ -216,7 +216,7 @@ function Headline({
   detail: string;
 }) {
   const styles = {
-    good: { bg: "#E8F5EC", border: "#BFE3CB", text: "#197A45", sub: "#2F6E68" },
+    good: { bg: "#FFF7ED", border: "#FDBA74", text: "#C2410C", sub: "#2F6E68" },
     bad: { bg: "#FBEAE8", border: "#F1C7C2", text: "#B5342C", sub: "#9A4138" },
     warn: { bg: "#FBF1DE", border: "#EFD8A6", text: "#9A6510", sub: "#A07A33" },
     neutral: { bg: "#FAFBFC", border: "#EBECEF", text: "#3D424B", sub: "#5C6069" },

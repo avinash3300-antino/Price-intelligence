@@ -84,21 +84,21 @@ export function Sidebar() {
 
   return (
     <aside
-      className={`${collapsed ? "w-[68px]" : "w-[248px]"} shrink-0 bg-[#0C2A29] text-[#CFE3E1] flex flex-col border-r border-[#0A2120] relative ${hydrated ? "transition-[width] duration-200 ease-out" : ""}`}
+      className={`${collapsed ? "w-[68px]" : "w-[248px]"} shrink-0 bg-[#FAFAF7] text-[#3D424B] flex flex-col border-r border-[#E6E3DC] relative ${hydrated ? "transition-[width] duration-200 ease-out" : ""}`}
     >
       {/* Logo + brand */}
       <div
         className={`${collapsed ? "px-0 justify-center" : "px-5"} pt-[22px] pb-[18px] flex items-center gap-[11px]`}
       >
-        <div className="w-[34px] h-[34px] rounded-[9px] bg-gradient-to-br from-[#19A89B] to-[#0E6F6A] grid place-items-center text-white font-bold text-base shadow-[0_2px_8px_rgba(13,110,106,0.45)] shrink-0">
+        <div className="w-[34px] h-[34px] rounded-[9px] bg-gradient-to-br from-[#F97316] to-[#EA580C] grid place-items-center text-white font-bold text-base shadow-[0_2px_6px_rgba(249,115,22,0.20)] shrink-0">
           R
         </div>
         {!collapsed && (
           <div className="leading-tight min-w-0 flex-1">
-            <div className="text-[14px] font-semibold text-white -tracking-[0.01em]">
+            <div className="text-[14px] font-semibold text-[#171717] -tracking-[0.01em]">
               Rayna
             </div>
-            <div className="text-[11px] font-normal text-[#7FB3AE] tracking-[0.02em]">
+            <div className="text-[11px] font-normal text-[#8A8F98] tracking-[0.02em]">
               Market Intelligence
             </div>
           </div>
@@ -111,7 +111,7 @@ export function Sidebar() {
         onClick={toggle}
         aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         title={collapsed ? "Expand" : "Collapse"}
-        className="absolute top-[34px] right-[-11px] w-[22px] h-[22px] rounded-full bg-[#16403D] border border-[#0A2120] text-[#CFE3E1] hover:bg-[#0E6F6A] hover:text-white shadow-[0_2px_6px_rgba(0,0,0,0.35)] flex items-center justify-center transition-colors z-10"
+        className="absolute top-[34px] right-[-11px] w-[22px] h-[22px] rounded-full bg-[#EDE9E0] border border-[#E6E3DC] text-[#3D424B] hover:bg-[#F97316] hover:text-white shadow-[0_2px_6px_rgba(0,0,0,0.35)] flex items-center justify-center transition-colors z-10"
       >
         {collapsed ? (
           <ChevronRight className="w-3 h-3" strokeWidth={2.5} />
@@ -121,7 +121,7 @@ export function Sidebar() {
       </button>
 
       {!collapsed && (
-        <div className="px-3 pt-2 pb-1 text-[10.5px] font-semibold tracking-[0.09em] uppercase text-[#5E8E89] mt-2">
+        <div className="px-3 pt-2 pb-1 text-[10.5px] font-semibold tracking-[0.09em] uppercase text-[#8A8F98] mt-2">
           Workspace
         </div>
       )}
@@ -145,7 +145,7 @@ export function Sidebar() {
                 role="link"
                 aria-disabled="true"
                 title={tooltip}
-                className={`${commonClasses} text-[#5E8E89] opacity-70 cursor-not-allowed select-none`}
+                className={`${commonClasses} text-[#8A8F98] opacity-70 cursor-not-allowed select-none`}
               >
                 <span className="w-[18px] h-[18px] inline-flex items-center justify-center shrink-0">
                   <Icon className="w-[17px] h-[17px]" strokeWidth={2} />
@@ -153,7 +153,7 @@ export function Sidebar() {
                 {!collapsed && (
                   <>
                     <span className="flex-1">{item.label}</span>
-                    <span className="text-[9.5px] font-semibold uppercase tracking-[0.06em] bg-[#0A2120] text-[#7FB3AE] border border-[#1B524E] px-[7px] py-[2px] rounded-[6px]">
+                    <span className="text-[9.5px] font-semibold uppercase tracking-[0.06em] bg-[#E6E3DC] text-[#8A8F98] border border-[#D5D2C6] px-[7px] py-[2px] rounded-[6px]">
                       Soon
                     </span>
                   </>
@@ -169,8 +169,8 @@ export function Sidebar() {
               title={collapsed ? item.label : undefined}
               className={`${commonClasses} ${
                 active
-                  ? "bg-[#16403D] text-white"
-                  : "text-[#9CC3BE] hover:text-white hover:bg-[#103E3B]/60"
+                  ? "bg-[#EDE9E0] text-[#171717]"
+                  : "text-[#5C6069] hover:text-[#171717] hover:bg-[#EDE9E0]/60"
               }`}
             >
               <span className="w-[18px] h-[18px] inline-flex items-center justify-center shrink-0">

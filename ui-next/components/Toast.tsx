@@ -80,10 +80,10 @@ function ToastCard({
   const Icon = isSuccess ? CheckCircle2 : XCircle;
   const styles = isSuccess
     ? {
-        bg: "bg-[#E8F5EC]",
-        border: "border-[#BFE3CB]",
-        icon: "text-[#197A45]",
-        text: "text-[#0F4D2C]",
+        bg: "bg-[#FFF7ED]",
+        border: "border-[#FDBA74]",
+        icon: "text-[#C2410C]",
+        text: "text-[#7C2D12]",
       }
     : {
         bg: "bg-[#FBEAE8]",

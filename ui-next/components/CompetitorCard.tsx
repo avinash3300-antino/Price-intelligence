@@ -52,7 +52,7 @@ export function CompetitorCard({
                 href={competitor.listingUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[13px] font-mono font-semibold text-[#1F2127] hover:text-[#0E6F6A] inline-flex items-center gap-1"
+                className="text-[13px] font-mono font-semibold text-[#1F2127] hover:text-[#EA580C] inline-flex items-center gap-1"
               >
                 {competitor.domain}
                 <ExternalLink className="w-3 h-3 opacity-50" />
@@ -100,7 +100,7 @@ export function CompetitorCard({
 
         <button
           onClick={() => setOpen(!open)}
-          className="mt-3 inline-flex items-center gap-1 text-[11.5px] font-semibold text-[#0E6F6A] hover:text-[#0B5853]"
+          className="mt-3 inline-flex items-center gap-1 text-[11.5px] font-semibold text-[#EA580C] hover:text-[#C2410C]"
         >
           <ChevronDown
             className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`}

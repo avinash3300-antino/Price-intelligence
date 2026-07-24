@@ -66,7 +66,7 @@ export default async function ReviewPage() {
                   >
                     <Link
                       href={`/comparison/product/${item.product_id}`}
-                      className="text-[12.5px] font-semibold text-[#0E6F6A] hover:text-[#0B5853]"
+                      className="text-[12.5px] font-semibold text-[#EA580C] hover:text-[#C2410C]"
                     >
                       {item.product_name}
                     </Link>

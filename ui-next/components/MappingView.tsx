@@ -4,7 +4,9 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import {
+  ArrowDown,
   ArrowLeftRight,
+  ArrowUp,
   Calendar,
   Check,
   ChevronDown,
@@ -14,11 +16,12 @@ import {
   Link as LinkIcon,
   Loader2,
   MapPin,
+  Minus,
   Plus,
   Search,
   X,
 } from "lucide-react";
-import { fmtMoney, fmtBasis, fmtAED } from "@/lib/format";
+import { fmtMoney, fmtBasis, fmtAED, fmtPercent, toAED } from "@/lib/format";
 import {
   API_BASE_PUBLIC,
   type DashboardStat,
@@ -337,7 +340,7 @@ function DatePill({
     <button
       type="button"
       onClick={openPicker}
-      className="relative inline-flex items-center gap-2 px-3.5 py-2 rounded-[10px] text-[13px] font-semibold border border-[#9FD4CE] bg-[#F2FAF9] text-[#0E6F6A] hover:bg-white transition-all cursor-pointer"
+      className="relative inline-flex items-center gap-2 px-3.5 py-2 rounded-[10px] text-[13px] font-semibold border border-[#F59E0B] bg-[#FFF7ED] text-[#EA580C] hover:bg-white transition-all cursor-pointer"
     >
       <Calendar className="w-3.5 h-3.5" />
       <span>{isToday ? `${displayVal} (today)` : displayVal}</span>
@@ -399,8 +402,8 @@ function SelectPill({
           disabled
             ? "bg-[#F6F7F9] text-[#B0B4BB] border-[#E7E8EB] cursor-not-allowed"
             : isEmpty
-              ? "bg-white border-[#E2E3E7] text-[#5C6069] hover:border-[#9FD4CE] hover:text-[#0E6F6A]"
-              : "bg-[#F2FAF9] border-[#9FD4CE] text-[#0E6F6A] hover:bg-white"
+              ? "bg-white border-[#E2E3E7] text-[#5C6069] hover:border-[#F59E0B] hover:text-[#EA580C]"
+              : "bg-[#FFF7ED] border-[#F59E0B] text-[#EA580C] hover:bg-white"
         }`}
       >
         <span className={disabled ? "text-[#C7CACF]" : "text-[#9AA0A8]"}>{icon}</span>
@@ -509,7 +512,7 @@ function PillPopover({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={searchPlaceholder}
-            className="w-full pl-8 pr-2.5 py-1.5 rounded-[7px] border border-[#E2E3E7] text-[12.5px] focus:outline-none focus:border-[#0E6F6A]"
+            className="w-full pl-8 pr-2.5 py-1.5 rounded-[7px] border border-[#E2E3E7] text-[12.5px] focus:outline-none focus:border-[#FDBA74]"
           />
         </div>
       </div>
@@ -523,7 +526,7 @@ function PillPopover({
                 onClick={() => onSelect(o.label)}
                 className={`w-full text-left px-3.5 py-2 flex items-center gap-2 text-[13px] transition-colors ${
                   isSel
-                    ? "bg-[#F2FAF9] text-[#0E6F6A] font-semibold"
+                    ? "bg-[#FFF7ED] text-[#EA580C] font-semibold"
                     : "text-[#1F2127] hover:bg-[#FAFBFC]"
                 }`}
               >
@@ -661,9 +664,9 @@ function ProductRow({
         disabled={!hasOptions}
         className={`w-full text-left px-3 py-2.5 rounded-[9px] transition-colors flex items-start gap-2.5 ${
           selected
-            ? "bg-[#0E6F6A] text-white shadow-sm"
+            ? "bg-[#FED7AA] text-black shadow-sm"
             : hasOptions
-              ? "hover:bg-[#F2FAF9] text-[#1F2127]"
+              ? "hover:bg-[#FFF7ED] text-[#1F2127]"
               : "text-[#9AA0A8] opacity-70 cursor-not-allowed"
         }`}
       >
@@ -671,7 +674,7 @@ function ProductRow({
           className={`w-[26px] h-[26px] shrink-0 rounded-[7px] grid place-items-center text-[15px] leading-none mt-0.5 ${
             selected
               ? "bg-white/20"
-              : "bg-[#F2FAF9] border border-[#DCEFEC]"
+              : "bg-[#FFF7ED] border border-[#3D424B]"
           }`}
         >
           {emojiForProduct(p.name)}
@@ -680,7 +683,7 @@ function ProductRow({
           <div className="flex items-baseline gap-1.5 mb-0.5">
             <span
               className={`text-[9px] font-mono uppercase tracking-[0.06em] ${
-                selected ? "text-white/70" : "text-[#9AA0A8]"
+                selected ? "text-black/60" : "text-[#9AA0A8]"
               }`}
             >
               #{p.id}
@@ -688,7 +691,7 @@ function ProductRow({
             {p.type && (
               <span
                 className={`text-[9px] font-mono uppercase tracking-[0.05em] ${
-                  selected ? "text-white/60" : "text-[#B0B4BB]"
+                  selected ? "text-black/45" : "text-[#B0B4BB]"
                 }`}
               >
                 {p.type}
@@ -700,35 +703,35 @@ function ProductRow({
           </div>
           <div
             className={`text-[10.5px] mt-1 flex items-center gap-1.5 ${
-              selected ? "text-white/75" : "text-[#8A8F98]"
+              selected ? "text-black/65" : "text-[#8A8F98]"
             }`}
           >
             <span className="tnum font-semibold">
               {option_count} opt{option_count === 1 ? "" : "s"}
             </span>
-            <span className={selected ? "text-white/40" : "text-[#D5D7DC]"}>·</span>
+            <span className={selected ? "text-black/25" : "text-[#D5D7DC]"}>·</span>
             <span className="tnum">{seller_count} sellers</span>
             {priceLine && (
               <>
-                <span className={selected ? "text-white/40" : "text-[#D5D7DC]"}>·</span>
+                <span className={selected ? "text-black/25" : "text-[#D5D7DC]"}>·</span>
                 <span className="tnum truncate">{priceLine}</span>
               </>
             )}
             {hasOptions && (
               <>
-                <span className={selected ? "text-white/40" : "text-[#D5D7DC]"}>·</span>
+                <span className={selected ? "text-black/25" : "text-[#D5D7DC]"}>·</span>
                 <span
                   className={`tnum font-medium ${
                     options_mapped_count === 0
                       ? selected
-                        ? "text-white/60"
+                        ? "text-black/45"
                         : "text-[#9AA0A8]"
                       : options_mapped_count === option_count
                         ? selected
                           ? "text-white"
-                          : "text-[#0E6F6A]"
+                          : "text-[#EA580C]"
                         : selected
-                          ? "text-white/90"
+                          ? "text-black/80"
                           : "text-[#1F2127]"
                   }`}
                   title={
@@ -901,14 +904,14 @@ function OptionRow({
         onClick={onClick}
         className={`w-full text-left px-3 py-2.5 rounded-[9px] transition-colors ${
           selected
-            ? "bg-[#0E6F6A] text-white shadow-sm"
-            : "hover:bg-[#F2FAF9] text-[#1F2127]"
+            ? "bg-[#FED7AA] text-black shadow-sm"
+            : "hover:bg-[#FFF7ED] text-[#1F2127]"
         }`}
       >
         <div className="flex items-start justify-between gap-2 mb-1">
           <div
             className={`text-[9px] font-mono uppercase tracking-[0.06em] ${
-              selected ? "text-white/70" : "text-[#9AA0A8]"
+              selected ? "text-black/60" : "text-[#9AA0A8]"
             }`}
           >
             variant #{option.option_id.toString().slice(-5)}
@@ -916,7 +919,7 @@ function OptionRow({
           {option.mapped_count > 0 && (
             <span
               className={`inline-flex items-center gap-1 text-[9.5px] font-bold uppercase tracking-[0.04em] ${
-                selected ? "text-white" : "text-[#197A45]"
+                selected ? "text-white" : "text-[#C2410C]"
               }`}
             >
               <Check className="w-2.5 h-2.5" strokeWidth={3} />
@@ -939,14 +942,14 @@ function OptionRow({
           </span>
           <span
             className={`text-[10.5px] font-mono ${
-              selected ? "text-white/70" : "text-[#8A8F98]"
+              selected ? "text-black/60" : "text-[#8A8F98]"
             }`}
           >
             {fmtBasis(option.pricing_basis)}
           </span>
           <span
             className={`ml-auto text-[10.5px] ${
-              selected ? "text-white/70" : "text-[#8A8F98]"
+              selected ? "text-black/60" : "text-[#8A8F98]"
             }`}
           >
             <span className="tnum font-semibold">{option.seller_count}</span>{" "}
@@ -1017,7 +1020,7 @@ function ListSearch({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full pl-8 pr-8 py-1.5 rounded-[8px] border border-[#E2E3E7] bg-white text-[12.5px] text-[#1F2127] placeholder:text-[#9AA0A8] focus:outline-none focus:border-[#0E6F6A]"
+        className="w-full pl-8 pr-8 py-1.5 rounded-[8px] border border-[#E2E3E7] bg-white text-[12.5px] text-[#1F2127] placeholder:text-[#9AA0A8] focus:outline-none focus:border-[#FDBA74]"
       />
       {value && (
         <button
@@ -1057,7 +1060,7 @@ function RightPane({
       ) : (
         <div className="h-full flex items-center justify-center px-10 py-16 text-center">
           <div>
-            <div className="w-[52px] h-[52px] rounded-[14px] bg-[#F2FAF9] border border-[#DCEFEC] grid place-items-center mx-auto mb-4 text-[24px]">
+            <div className="w-[52px] h-[52px] rounded-[14px] bg-[#FFF7ED] border border-[#3D424B] grid place-items-center mx-auto mb-4 text-[24px]">
               🎯
             </div>
             <div className="text-[15px] font-semibold text-[#1F2127] mb-1.5">
@@ -1318,7 +1321,7 @@ function WorkspacePanel({
                 type="button"
                 onClick={() => setUrlModalOpen(true)}
                 disabled={selectedRaynaId == null}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[7px] text-[11.5px] font-semibold bg-white text-[#0E6F6A] border border-[#9FD4CE] hover:bg-[#F2FAF9] hover:border-[#0E6F6A] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[7px] text-[11.5px] font-semibold bg-white text-[#EA580C] border border-[#F59E0B] hover:bg-[#FFF7ED] hover:border-[#FDBA74] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 title={
                   selectedRaynaId == null
                     ? "Select a Rayna option first"
@@ -1383,48 +1386,49 @@ function RaynaOptionCard({
     <button
       type="button"
       onClick={onSelect}
-      className={`text-left rounded-[12px] p-4 transition-all ${
+      className={`text-left rounded-[12px] px-4 py-3 transition-all w-full ${
         selected
-          ? "bg-[#F2FAF9] border-[1.5px] border-[#9FD4CE] shadow-sm ring-2 ring-[#DCEFEC]"
-          : "bg-white border border-[#EBECEF] hover:border-[#D5D7DC] hover:shadow-sm"
+          ? "bg-gradient-to-br from-[#FFF7ED] to-[#FFF7ED] border-[1.5px] border-[#FDBA74] shadow-[0_1px_2px_rgba(249,115,22,0.06)]"
+          : "bg-white border border-[#E6E3DC] hover:border-[#CFCABC] hover:shadow-sm"
       }`}
     >
-      <div className="flex items-center justify-between mb-2.5">
+      <div className="flex items-center justify-between gap-2 mb-1">
         <div
-          className={`text-[10px] font-mono tracking-[0.06em] uppercase ${
-            selected ? "text-[#0E6F6A]" : "text-[#9AA0A8]"
+          className={`text-[10px] font-semibold tracking-[0.09em] uppercase ${
+            selected ? "text-[#C2410C]" : "text-[#9A9E9C]"
           }`}
         >
-          Option #{option.id}
+          Your option
         </div>
-        {selected && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[5px] text-[9px] font-bold uppercase tracking-[0.05em] bg-[#0E6F6A] text-white">
-            <Check className="w-2.5 h-2.5" strokeWidth={3} />
-            Target
-          </span>
-        )}
+        <div className="flex items-center gap-1.5">
+          {mappedCount > 0 && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-[2px] rounded-[5px] text-[10px] font-semibold bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]">
+              <Check className="w-2.5 h-2.5" strokeWidth={3} />
+              {mappedCount}
+            </span>
+          )}
+          {selected && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-[2px] rounded-[5px] text-[9.5px] font-bold uppercase tracking-[0.06em] bg-[#C2410C] text-white">
+              Target
+            </span>
+          )}
+        </div>
       </div>
       <div
-        className={`text-[13px] font-medium leading-snug mb-3.5 min-h-[2.4rem] ${
-          selected ? "text-[#0E6F6A]" : "text-[#1F2127]"
+        className={`text-[14px] font-semibold leading-snug ${
+          selected ? "text-[#7C2D12]" : "text-[#1A1F1E]"
         }`}
       >
         {option.name}
       </div>
-      <div className="flex items-baseline justify-between gap-2 mb-1.5">
-        <span className="tnum text-[18px] font-semibold text-[#16181D]">
+      <div className="flex items-baseline gap-2 mt-1.5">
+        <span className="tnum text-[17px] font-semibold text-[#7C2D12]">
           {fmtMoney(option.price, option.currency)}
         </span>
-        <span className="text-[10.5px] text-[#8A8F98] font-mono">
-          {fmtBasis(option.pricing_basis)}
+        <span className="text-[11px] text-[#6A6F6D]">
+          · {fmtBasis(option.pricing_basis)}
         </span>
       </div>
-      {mappedCount > 0 && (
-        <div className="text-[11px] text-[#197A45] font-semibold mt-2 flex items-center gap-1">
-          <Check className="w-3 h-3" strokeWidth={3} />
-          {mappedCount} competitor{mappedCount === 1 ? "" : "s"} mapped
-        </div>
-      )}
     </button>
   );
 }
@@ -1451,27 +1455,51 @@ function SellerCard({
   onUnmap: (mappingId: number) => Promise<void>;
 }) {
   const mapped = options.filter((o) => o.mapping != null).length;
+  const fullyMapped = mapped === options.length && mapped > 0;
   return (
-    <div>
-      <div className="flex items-center gap-2.5 px-1 py-2">
-        <span className="w-[22px] h-[22px] rounded-[6px] bg-[#F2F3F5] border border-[#EAEBEE] grid place-items-center text-[11px] font-bold text-[#6B7280]">
-          {sellerDomain[0].toUpperCase()}
-        </span>
-        <span className="font-mono text-[12.5px] font-semibold text-[#3D424B]">
-          {sellerDomain}
-        </span>
-        <span className="text-[11px] text-[#9AA0A8]">
-          · {options.length} option{options.length === 1 ? "" : "s"}
-          {listingCount > 1 ? ` · ${listingCount} pages` : ""}
-        </span>
-        {mapped > 0 && (
-          <span className="ml-auto inline-flex items-center gap-1 px-2 py-[3px] rounded-[6px] text-[10.5px] font-semibold bg-[#E8F5EC] text-[#197A45] border border-[#BFE3CB]">
-            <Check className="w-2.5 h-2.5" strokeWidth={3} />
-            {mapped} mapped
+    <section className="mt-6 first:mt-0">
+      {/* Slim divider header — clearly a group boundary, not another card */}
+      <div className="flex items-center gap-3 mb-3">
+        <div className="flex items-center gap-2 shrink-0">
+          <span
+            className={`w-[24px] h-[24px] rounded-[7px] grid place-items-center text-[11px] font-bold ${
+              fullyMapped
+                ? "bg-[#C2410C] text-white"
+                : "bg-[#F3F0E8] text-[#5D6260] border border-[#E6E3DC]"
+            }`}
+          >
+            {sellerDomain[0].toUpperCase()}
           </span>
-        )}
+          <span className="font-medium text-[13px] text-[#1A1F1E] tracking-tight">
+            {sellerDomain}
+          </span>
+        </div>
+        <div className="flex-1 h-px bg-[#E6E3DC]" />
+        <div className="flex items-center gap-2 shrink-0 text-[11px] text-[#6A6F6D]">
+          <span>
+            {options.length} option{options.length === 1 ? "" : "s"}
+          </span>
+          {listingCount > 1 && (
+            <>
+              <span className="text-[#CFCABC]">·</span>
+              <span>{listingCount} pages</span>
+            </>
+          )}
+          {mapped > 0 && (
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-[2px] rounded-full text-[10.5px] font-semibold ${
+                fullyMapped
+                  ? "bg-[#C2410C] text-white"
+                  : "bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]"
+              }`}
+            >
+              <Check className="w-2.5 h-2.5" strokeWidth={3} />
+              {mapped}/{options.length} mapped
+            </span>
+          )}
+        </div>
       </div>
-      <ul className="rounded-[10px] border border-[#EBECEF] bg-white divide-y divide-[#F1F2F4] overflow-hidden">
+      <div className="space-y-2">
         {options.map((opt) => (
           <CompetitorRow
             key={opt.option_id}
@@ -1484,8 +1512,8 @@ function SellerCard({
             onUnmap={onUnmap}
           />
         ))}
-      </ul>
-    </div>
+      </div>
+    </section>
   );
 }
 
@@ -1543,123 +1571,173 @@ function CompetitorRow({
       : null;
 
   const mappedName = option.mapping?.rayna_option_name ?? "";
-  const mappedNameShort =
-    mappedName.length > 36 ? mappedName.slice(0, 34) + "…" : mappedName;
+  const foreignCurrency =
+    option.price != null && (option.currency || "AED").toUpperCase() !== "AED";
+
+  // Compute the price gap against whichever Rayna option is the natural
+  // reference — the mapped-to one if mapped, else the currently-selected one.
+  const compareRayna = raynaOptions.find((o) => o.id === compareRaynaId);
+  const compAED = toAED(option.price, option.currency);
+  const raynaAED = toAED(compareRayna?.price ?? null, compareRayna?.currency ?? null);
+  let gap: { pct: number; color: string; bg: string; border: string; label: string; Arrow: typeof ArrowUp } | null = null;
+  if (compAED != null && raynaAED != null && raynaAED > 0) {
+    const diff = compAED - raynaAED;
+    const pct = (diff / raynaAED) * 100;
+    if (Math.abs(diff) < 0.5) {
+      gap = { pct, color: "#3F4644", bg: "#F3F0E8", border: "#E6E3DC", label: "match", Arrow: Minus };
+    } else if (diff > 0) {
+      // Competitor is more expensive → Rayna wins
+      gap = { pct, color: "#15803D", bg: "#F0FDF4", border: "#BBF7D0", label: "we win", Arrow: ArrowUp };
+    } else {
+      gap = { pct, color: "#B91C1C", bg: "#FEF2F2", border: "#FCA5A5", label: "we lose", Arrow: ArrowDown };
+    }
+  }
+
   return (
-    <li
-      className={`relative pl-4 pr-3 py-3 transition-colors ${
+    <div
+      className={`relative rounded-[12px] transition-all overflow-hidden ${
         mapped
-          ? "bg-[#F2FAF9] hover:bg-[#E8F5EC]/40"
-          : "hover:bg-[#FAFBFC]/60"
+          ? "bg-gradient-to-br from-[#FFF7ED] to-[#FFF7ED] border border-[#FDBA74] shadow-[0_1px_2px_rgba(249,115,22,0.06)]"
+          : "bg-white border border-[#E6E3DC] hover:border-[#CFCABC] hover:shadow-sm"
       }`}
     >
       {mapped && (
-        <span
-          aria-hidden
-          className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#0E6F6A]"
-        />
-      )}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="min-w-0 flex-1">
-          <a
-            href={option.listing_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[#1F2127] font-medium text-[13px] hover:text-[#0E6F6A] inline-flex items-start gap-1.5 leading-snug"
-          >
-            <span className="line-clamp-2">{option.name}</span>
-            <ExternalLink className="w-3 h-3 opacity-40 shrink-0 mt-0.5" />
-          </a>
-          <div className="flex items-center gap-1.5 text-[11px] text-[#8A8F98] mt-1 flex-wrap">
-            <span className="tnum font-semibold text-[#1F2127]">
-              {fmtAED(option.price, option.currency)}
+        <>
+          <span
+            aria-hidden
+            className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#C2410C]"
+          />
+          <div className="px-4 pt-2.5 pb-1.5 flex items-center gap-2 border-b border-[#FED7AA]/60 bg-[#FFF7ED]/40">
+            <span className="inline-flex items-center gap-1 px-2 py-[2px] rounded-full text-[10.5px] font-semibold bg-[#C2410C] text-white">
+              <Check className="w-2.5 h-2.5" strokeWidth={3} />
+              Mapped
             </span>
-            {option.price != null &&
-              (option.currency || "AED").toUpperCase() !== "AED" && (
-                <span className="tnum text-[10.5px] text-[#9AA0A8]">
-                  ({fmtMoney(option.price, option.currency)})
-                </span>
+            <span className="text-[11.5px] text-[#7C2D12] font-medium truncate">
+              → {mappedName}
+            </span>
+          </div>
+        </>
+      )}
+
+      <div className="px-4 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <a
+              href={option.listing_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group text-[14px] font-semibold text-[#1A1F1E] hover:text-[#C2410C] inline-flex items-start gap-1.5 leading-snug"
+            >
+              <span className="line-clamp-2">{option.name}</span>
+              <ExternalLink className="w-3.5 h-3.5 opacity-30 group-hover:opacity-70 shrink-0 mt-0.5 transition-opacity" />
+            </a>
+            <div className="flex items-center gap-2 text-[11.5px] text-[#6A6F6D] mt-1">
+              <span>{fmtBasis(option.pricing_basis)}</span>
+              {option.tier && option.tier !== "standard" && (
+                <>
+                  <span className="text-[#CFCABC]">·</span>
+                  <span className="font-mono text-[#4A4F4D]">{option.tier}</span>
+                </>
               )}
-            <span className="text-[#D5D7DC]">·</span>
-            <span className="font-mono">{fmtBasis(option.pricing_basis)}</span>
-            {option.tier && option.tier !== "standard" && (
-              <>
-                <span className="text-[#D5D7DC]">·</span>
-                <span className="font-mono text-[#5C6069]">{option.tier}</span>
-              </>
+            </div>
+          </div>
+
+          {/* Primary action zone */}
+          <div className="shrink-0 flex items-center gap-1.5">
+            {compareUrl && (
+              <a
+                href={compareUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-[8px] text-[12px] font-medium text-[#4A4F4D] hover:bg-[#F3F0E8] hover:text-[#1A1F1E] transition-colors"
+                title="Open side-by-side comparison in a new tab"
+              >
+                <ArrowLeftRight className="w-3.5 h-3.5" strokeWidth={2} />
+                Compare
+              </a>
             )}
-            {mapped && (
-              <>
-                <span className="text-[#D5D7DC]">·</span>
-                <span className="inline-flex items-center gap-1 text-[10.5px] text-[#197A45] font-semibold">
-                  <Check className="w-2.5 h-2.5" strokeWidth={3} />
-                  → {mappedNameShort}
-                </span>
-              </>
+            {mapped ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handleUnmap}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-[8px] text-[12px] font-semibold text-[#B91C1C] bg-white border border-[#FCA5A5]/60 hover:bg-[#FEF2F2] hover:border-[#B91C1C] disabled:opacity-40 transition-colors"
+                title="Remove this mapping"
+              >
+                {busy ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+                )}
+                Unmap
+              </button>
+            ) : showPopover ? (
+              <button
+                ref={buttonRef}
+                type="button"
+                disabled={busy}
+                onClick={() => setOpen((v) => !v)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-[8px] text-[12px] font-semibold bg-[#C2410C] text-white hover:bg-[#0D5F5A] shadow-sm disabled:opacity-50 transition-colors"
+              >
+                {busy ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+                )}
+                Map to…
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`}
+                />
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={busy || directRaynaId == null}
+                onClick={() => directRaynaId != null && handleMap(directRaynaId)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-[8px] text-[12px] font-semibold bg-[#C2410C] text-white hover:bg-[#0D5F5A] shadow-sm disabled:opacity-50 transition-colors"
+              >
+                {busy ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+                )}
+                Map
+              </button>
             )}
           </div>
         </div>
 
-        <div className="shrink-0 flex items-center gap-1.5">
-          {compareUrl && (
-            <a
-              href={compareUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[7px] text-[11px] font-semibold bg-white text-[#0E6F6A] border border-[#DCEFEC] hover:bg-[#F2FAF9] hover:border-[#0E6F6A] transition-colors"
-              title="Open side-by-side comparison in a new tab"
+        {/* Price block + gap chip on a single line */}
+        <div className="mt-2.5 flex items-baseline flex-wrap gap-x-3 gap-y-1.5">
+          <div className="flex items-baseline gap-2">
+            {foreignCurrency && (
+              <span className="tnum text-[11.5px] text-[#9A9E9C]">
+                {fmtMoney(option.price, option.currency)}
+              </span>
+            )}
+            <span className="tnum text-[18px] font-semibold text-[#1A1F1E]">
+              {fmtAED(option.price, option.currency)}
+            </span>
+          </div>
+          {gap && (
+            <span
+              className="inline-flex items-center gap-1 px-2 py-[3px] rounded-full text-[11px] font-semibold border"
+              style={{
+                color: gap.color,
+                background: gap.bg,
+                borderColor: gap.border,
+              }}
+              title={`Competitor is ${fmtPercent(gap.pct, { sign: true })} vs Rayna AED ${raynaAED?.toFixed(0)}`}
             >
-              <ArrowLeftRight className="w-3 h-3" strokeWidth={2.5} />
-              Compare
-            </a>
-          )}
-          {mapped ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={handleUnmap}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[7px] text-[11px] font-semibold text-[#9AA0A8] hover:bg-[#FBEAE8] hover:text-[#B5342C] disabled:opacity-40 transition-colors"
-              title="Unmap"
-            >
-              {busy ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <X className="w-3 h-3" strokeWidth={2.5} />
-              )}
-              Unmap
-            </button>
-          ) : showPopover ? (
-            <button
-              ref={buttonRef}
-              type="button"
-              disabled={busy}
-              onClick={() => setOpen((v) => !v)}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[7px] text-[11px] font-semibold bg-[#0E6F6A] text-white hover:bg-[#0B5853] shadow-sm shadow-[#0E6F6A]/20 disabled:opacity-50 transition-colors"
-            >
-              {busy ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <Plus className="w-3 h-3" strokeWidth={3} />
-              )}
-              Map to…
-              <ChevronDown
-                className={`w-3 h-3 transition-transform ${open ? "rotate-180" : ""}`}
-              />
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={busy || directRaynaId == null}
-              onClick={() => directRaynaId != null && handleMap(directRaynaId)}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[7px] text-[11px] font-semibold bg-[#0E6F6A] text-white hover:bg-[#0B5853] shadow-sm shadow-[#0E6F6A]/20 disabled:opacity-50 transition-colors"
-            >
-              {busy ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <Plus className="w-3 h-3" strokeWidth={3} />
-              )}
-              Map
-            </button>
+              <gap.Arrow className="w-3 h-3" strokeWidth={3} />
+              <span className="tnum">{fmtPercent(gap.pct, { sign: true })}</span>
+              <span className="opacity-70 font-normal text-[10.5px]">
+                vs your{" "}
+                <span className="tnum font-semibold">
+                  AED {raynaAED != null ? raynaAED.toFixed(0) : "—"}
+                </span>
+              </span>
+            </span>
           )}
         </div>
       </div>
@@ -1672,7 +1750,7 @@ function CompetitorRow({
           onClose={() => setOpen(false)}
         />
       )}
-    </li>
+    </div>
   );
 }
 
@@ -1745,7 +1823,7 @@ function RaynaOptionPopover({
             <button
               type="button"
               onClick={() => onPick(ro.id)}
-              className="w-full text-left px-4 py-3 hover:bg-[#F2FAF9] transition-colors"
+              className="w-full text-left px-4 py-3 hover:bg-[#FFF7ED] transition-colors"
             >
               <div className="font-medium text-[#1F2127] text-[13px] leading-snug line-clamp-2 mb-1">
                 {ro.name}

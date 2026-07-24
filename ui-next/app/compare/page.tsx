@@ -213,13 +213,13 @@ export default async function ComparePage({
           <span>
             {dateLabel}
             {isToday && (
-              <span className="ml-1 text-[#0E6F6A] font-semibold">(today)</span>
+              <span className="ml-1 text-[#EA580C] font-semibold">(today)</span>
             )}
           </span>
         </div>
 
         <div className="flex items-start gap-3.5 mb-6">
-          <div className="w-[52px] h-[52px] rounded-[13px] bg-[#F2FAF9] border border-[#DCEFEC] flex items-center justify-center text-[#0E6F6A]">
+          <div className="w-[52px] h-[52px] rounded-[13px] bg-[#FFF7ED] border border-[#3D424B] flex items-center justify-center text-[#EA580C]">
             <ArrowLeftRight className="w-6 h-6" />
           </div>
           <div className="flex-1 min-w-0">
@@ -337,13 +337,13 @@ function SideHeader({
     <div
       className={`rounded-[13px] border px-5 py-4 ${
         isTeal
-          ? "bg-[#F2FAF9] border-[#9FD4CE]"
+          ? "bg-[#FFF7ED] border-[#F59E0B]"
           : "bg-white border-[#EBECEF]"
       }`}
     >
       <div
         className={`text-[10.5px] font-semibold uppercase tracking-[0.09em] mb-1.5 ${
-          isTeal ? "text-[#0E6F6A]" : "text-[#5C6069]"
+          isTeal ? "text-[#EA580C]" : "text-[#5C6069]"
         }`}
       >
         {isTeal ? "Rayna" : side}
@@ -353,7 +353,7 @@ function SideHeader({
           href={externalUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-[15px] font-semibold text-[#1F2127] hover:text-[#0E6F6A] inline-flex items-start gap-1.5 leading-snug mb-2"
+          className="text-[15px] font-semibold text-[#1F2127] hover:text-[#EA580C] inline-flex items-start gap-1.5 leading-snug mb-2"
         >
           <span>{name}</span>
           <ExternalLink className="w-3.5 h-3.5 opacity-50 mt-1 shrink-0" />

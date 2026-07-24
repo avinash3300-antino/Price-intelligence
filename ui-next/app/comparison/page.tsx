@@ -107,8 +107,8 @@ function KPIRow({
         value={`${leadersPct}%`}
         sub={`${leaders} of ${stats.length} products`}
         icon={<Trophy className="w-[15px] h-[15px]" />}
-        iconBg="bg-[#E8F5EC]"
-        iconColor="text-[#197A45]"
+        iconBg="bg-[#FFF7ED]"
+        iconColor="text-[#C2410C]"
         valueTone="text-[#16181D]"
       />
       <KPICard
@@ -124,8 +124,8 @@ function KPIRow({
         value={pipeline.competitors}
         sub={`${pipeline.scraped_listings} PDPs scraped`}
         icon={<Store className="w-[15px] h-[15px]" />}
-        iconBg="bg-[#F2FAF9]"
-        iconColor="text-[#0E6F6A]"
+        iconBg="bg-[#FFF7ED]"
+        iconColor="text-[#EA580C]"
       />
     </div>
   );
@@ -182,9 +182,9 @@ function ProductRow({ stat }: { stat: DashboardStat }) {
     if (pct > 1) {
       position = {
         label: `Cheapest · ${fmtPercent(Math.abs(pct))} under`,
-        color: "#197A45",
-        bg: "#E8F5EC",
-        border: "#BFE3CB",
+        color: "#C2410C",
+        bg: "#FFF7ED",
+        border: "#FDBA74",
       };
     } else if (pct < -1) {
       position = {
@@ -209,7 +209,7 @@ function ProductRow({ stat }: { stat: DashboardStat }) {
       className="grid grid-cols-[2.4fr_0.8fr_1fr_1.4fr_0.9fr] gap-3 items-center px-5 py-[14px] border-b border-[#F1F2F4] last:border-b-0 hover:bg-[#FAFBFC] transition-colors"
     >
       <div className="flex items-center gap-[11px] min-w-0">
-        <span className="w-[34px] h-[34px] shrink-0 rounded-[9px] bg-[#F2FAF9] border border-[#DCEFEC] grid place-items-center text-[16px]">
+        <span className="w-[34px] h-[34px] shrink-0 rounded-[9px] bg-[#FFF7ED] border border-[#3D424B] grid place-items-center text-[16px]">
           {emojiFor(product.name)}
         </span>
         <div className="min-w-0">

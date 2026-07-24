@@ -132,7 +132,7 @@ export function CompareActionBar({
     <div className="rounded-[13px] border border-[#EBECEF] bg-white px-5 py-4 flex items-center gap-4 flex-wrap">
       {mappedToThis ? (
         <>
-          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-[8px] text-[12.5px] font-semibold bg-[#E8F5EC] text-[#197A45] border border-[#BFE3CB]">
+          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-[8px] text-[12.5px] font-semibold bg-[#FFF7ED] text-[#C2410C] border border-[#FDBA74]">
             <Check className="w-3.5 h-3.5" strokeWidth={3} />
             Mapped to {truncate(raynaOptionName, 40)}
           </span>
@@ -166,7 +166,7 @@ export function CompareActionBar({
             type="button"
             disabled={busy}
             onClick={doRemap}
-            className="ml-auto inline-flex items-center gap-1.5 px-4 py-2 rounded-[9px] text-[12.5px] font-semibold bg-[#0E6F6A] text-white hover:bg-[#0B5853] shadow-sm shadow-[#0E6F6A]/20 disabled:opacity-50 transition-colors"
+            className="ml-auto inline-flex items-center gap-1.5 px-4 py-2 rounded-[9px] text-[12.5px] font-semibold bg-[#FED7AA] text-black hover:bg-[#FDBA74] shadow-sm shadow-[#F97316]/15 disabled:opacity-50 transition-colors"
           >
             {busy ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -189,7 +189,7 @@ export function CompareActionBar({
             type="button"
             disabled={busy}
             onClick={doMap}
-            className="ml-auto inline-flex items-center gap-1.5 px-4 py-2 rounded-[9px] text-[12.5px] font-semibold bg-[#0E6F6A] text-white hover:bg-[#0B5853] shadow-sm shadow-[#0E6F6A]/20 disabled:opacity-50 transition-colors"
+            className="ml-auto inline-flex items-center gap-1.5 px-4 py-2 rounded-[9px] text-[12.5px] font-semibold bg-[#FED7AA] text-black hover:bg-[#FDBA74] shadow-sm shadow-[#F97316]/15 disabled:opacity-50 transition-colors"
           >
             {busy ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
