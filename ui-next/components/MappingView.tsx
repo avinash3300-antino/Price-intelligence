@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import {
   ArrowLeftRight,
@@ -108,11 +108,12 @@ function emojiForProduct(name: string): string {
 
 export function MappingView({ initialProducts }: Props) {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
 
-  // If landed from /compare (or a "return to workspace" link) with
-  // ?productId=X, pre-select the matching country + city + product so the
-  // user lands in context. ?raynaOptionId is honored downstream by
-  // OptionPanel to auto-focus the option once its list loads.
+  // Hydrate initial state from the URL so the workspace survives refresh —
+  // country + city + product + option + date all round-trip through the URL.
+  // This also keeps a shareable link ("open this exact selection") working.
   const initialProduct = useMemo<DashboardStat | null>(() => {
     const raw = searchParams?.get("productId");
     if (!raw) return null;
@@ -128,21 +129,41 @@ export function MappingView({ initialProducts }: Props) {
     return Number.isFinite(n) ? n : null;
   }, [searchParams]);
 
-  const [country, setCountry] = useState<string | null>(
-    initialProduct?.product.country ?? null,
-  );
-  const [city, setCity] = useState<string | null>(
-    initialProduct?.product.city ?? null,
-  );
+  const initialCountry =
+    searchParams?.get("country") ??
+    initialProduct?.product.country ??
+    null;
+  const initialCity =
+    searchParams?.get("city") ?? initialProduct?.product.city ?? null;
+  const initialDate = (() => {
+    const raw = searchParams?.get("date");
+    if (raw && /^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    return new Date().toISOString().slice(0, 10);
+  })();
+
+  const [country, setCountry] = useState<string | null>(initialCountry);
+  const [city, setCity] = useState<string | null>(initialCity);
   const [chosenProduct, setChosenProduct] = useState<DashboardStat | null>(
     initialProduct,
   );
   const [chosenOption, setChosenOption] = useState<OptionListItem | null>(null);
   // Default to today's date so prices reflect a real bookable date immediately;
   // user can change to any date within the next 60 days.
-  const [chosenDate, setChosenDate] = useState<string>(() =>
-    new Date().toISOString().slice(0, 10),
-  );
+  const [chosenDate, setChosenDate] = useState<string>(initialDate);
+
+  // Sync state → URL on every change. Using router.replace (not push) so
+  // navigation history doesn't fill up with intermediate selections. Empty
+  // params are omitted for a cleaner URL.
+  useEffect(() => {
+    const qs = new URLSearchParams();
+    if (country) qs.set("country", country);
+    if (city) qs.set("city", city);
+    if (chosenProduct) qs.set("productId", String(chosenProduct.product.id));
+    if (chosenOption) qs.set("raynaOptionId", String(chosenOption.option_id));
+    if (chosenDate) qs.set("date", chosenDate);
+    const next = qs.toString() ? `${pathname}?${qs.toString()}` : pathname;
+    router.replace(next, { scroll: false });
+  }, [country, city, chosenProduct, chosenOption, chosenDate, pathname, router]);
 
   function selectCountry(c: string | null) {
     setCountry(c);

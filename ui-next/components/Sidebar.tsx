@@ -19,6 +19,7 @@ interface NavItem {
   icon: LucideIcon;
   matcher: (path: string) => boolean;
   badge?: number;
+  comingSoon?: boolean;
 }
 
 const NAV: NavItem[] = [
@@ -39,12 +40,14 @@ const NAV: NavItem[] = [
     label: "Comparison",
     icon: LayoutGrid,
     matcher: (p) => p === "/comparison" || p.startsWith("/comparison/"),
+    comingSoon: true,
   },
   {
     href: "/review",
     label: "Review",
     icon: CheckSquare,
     matcher: (p) => p === "/review",
+    comingSoon: true,
   },
 ];
 
@@ -128,14 +131,43 @@ export function Sidebar() {
         {NAV.map((item) => {
           const active = item.matcher(pathname);
           const Icon = item.icon;
+          const commonClasses = `flex items-center gap-[11px] w-full py-[9px] rounded-[9px] text-[13.5px] font-medium transition-colors ${
+            collapsed ? "justify-center px-0" : "px-3"
+          }`;
+
+          if (item.comingSoon) {
+            const tooltip = collapsed
+              ? `${item.label} — Coming soon`
+              : "Coming soon";
+            return (
+              <div
+                key={item.href}
+                role="link"
+                aria-disabled="true"
+                title={tooltip}
+                className={`${commonClasses} text-[#5E8E89] opacity-70 cursor-not-allowed select-none`}
+              >
+                <span className="w-[18px] h-[18px] inline-flex items-center justify-center shrink-0">
+                  <Icon className="w-[17px] h-[17px]" strokeWidth={2} />
+                </span>
+                {!collapsed && (
+                  <>
+                    <span className="flex-1">{item.label}</span>
+                    <span className="text-[9.5px] font-semibold uppercase tracking-[0.06em] bg-[#0A2120] text-[#7FB3AE] border border-[#1B524E] px-[7px] py-[2px] rounded-[6px]">
+                      Soon
+                    </span>
+                  </>
+                )}
+              </div>
+            );
+          }
+
           return (
             <Link
               key={item.href}
               href={item.href}
               title={collapsed ? item.label : undefined}
-              className={`flex items-center gap-[11px] w-full py-[9px] rounded-[9px] text-[13.5px] font-medium transition-colors ${
-                collapsed ? "justify-center px-0" : "px-3"
-              } ${
+              className={`${commonClasses} ${
                 active
                   ? "bg-[#16403D] text-white"
                   : "text-[#9CC3BE] hover:text-white hover:bg-[#103E3B]/60"
