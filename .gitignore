@@ -1,0 +1,41 @@
+# Env
+.env
+.env.*
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Data & caches
+data/*.db
+data/*.db-journal
+data/*.db.bak-*
+data/*.sqlite
+data/*.sqlite-journal
+data/firecrawl_cache/
+data/searchapi_cache/
+data/feed_cache.json
+logs/
+*.log
+
+# Node / Next.js (ui-next)
+node_modules/
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+.npm/
+.pnp.*
+.yarn/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# Claude
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
