@@ -1,0 +1,35 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Node (also excluded per-context via ui-next/.dockerignore, but belt-and-braces)
+**/node_modules/
+**/.next/
+**/dist/
+**/build/
+**/*.tsbuildinfo
+**/.npm/
+
+# Runtime data — mounted from the host, never baked into the image
+data/
+logs/
+
+# Secrets — loaded via docker-compose env_file at runtime
+.env
+.env.*
+
+# Git + editor + OS
+.git/
+.gitignore
+.github/
+.idea/
+.vscode/
+.DS_Store
+
+# Claude tooling
+.claude/
+
+# UI folder never needed by the api container
+ui/

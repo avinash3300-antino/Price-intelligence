@@ -1,0 +1,22 @@
+node_modules/
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+.npm/
+
+# Env — Next reads NEXT_PUBLIC_* from build args in docker-compose.yml
+.env
+.env.*
+.env.local
+
+# Git + editor + OS
+.git/
+.gitignore
+.idea/
+.vscode/
+.DS_Store
+
+# Claude
+.claude/
