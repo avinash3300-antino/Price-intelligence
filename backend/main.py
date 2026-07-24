@@ -76,6 +76,9 @@ class DashboardStat(BaseModel):
     option_count: int
     seller_count: int
     comparable_count: int
+    # Count of this product's Rayna options that have at least one manual
+    # mapping. Renders as "N/option_count mapped" on the Products list.
+    options_mapped_count: int = 0
     rayna_price: RaynaPriceSummary
     cheapest_competitor: Optional[CheapestCompetitor] = None
 
@@ -316,6 +319,13 @@ def dashboard() -> DashboardPayload:
                 "SELECT COUNT(*) FROM competitors WHERE rayna_product_id=? AND sells_this_product=1",
                 p["id"],
             )
+            options_mapped_count = scalar(
+                """SELECT COUNT(DISTINCT m.rayna_option_id)
+                   FROM mappings m
+                   JOIN options ro ON ro.id = m.rayna_option_id
+                   WHERE ro.rayna_product_id=? AND m.is_manual=1""",
+                p["id"],
+            )
 
             comparable_rows = c.execute(
                 """SELECT ro.price AS rp, o.price AS cp, o.currency AS cc, c.seller_domain
@@ -369,6 +379,7 @@ def dashboard() -> DashboardPayload:
                     option_count=option_count,
                     seller_count=seller_count,
                     comparable_count=len(comparable_rows),
+                    options_mapped_count=options_mapped_count,
                     rayna_price=price_summary,
                     cheapest_competitor=cheapest,
                 )

@@ -631,7 +631,7 @@ function ProductRow({
   selected: boolean;
   onClick: () => void;
 }) {
-  const { product: p, option_count, seller_count, rayna_price } = product;
+  const { product: p, option_count, seller_count, options_mapped_count, rayna_price } = product;
   const hasOptions = option_count > 0;
   const min = rayna_price.min_price;
   const max = rayna_price.max_price;
@@ -701,6 +701,36 @@ function ProductRow({
               <>
                 <span className={selected ? "text-white/40" : "text-[#D5D7DC]"}>·</span>
                 <span className="tnum truncate">{priceLine}</span>
+              </>
+            )}
+            {hasOptions && (
+              <>
+                <span className={selected ? "text-white/40" : "text-[#D5D7DC]"}>·</span>
+                <span
+                  className={`tnum font-medium ${
+                    options_mapped_count === 0
+                      ? selected
+                        ? "text-white/60"
+                        : "text-[#9AA0A8]"
+                      : options_mapped_count === option_count
+                        ? selected
+                          ? "text-white"
+                          : "text-[#0E6F6A]"
+                        : selected
+                          ? "text-white/90"
+                          : "text-[#1F2127]"
+                  }`}
+                  title={
+                    options_mapped_count === 0
+                      ? "No competitor mapped yet"
+                      : `${options_mapped_count} of ${option_count} option${option_count === 1 ? "" : "s"} mapped to competitors`
+                  }
+                >
+                  {options_mapped_count}/{option_count} mapped
+                  {options_mapped_count > 0 && options_mapped_count === option_count && (
+                    <span aria-hidden="true"> ✓</span>
+                  )}
+                </span>
               </>
             )}
           </div>

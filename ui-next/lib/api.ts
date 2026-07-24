@@ -58,6 +58,7 @@ export interface DashboardStat {
   option_count: number;
   seller_count: number;
   comparable_count: number;
+  options_mapped_count: number;
   rayna_price: RaynaPriceSummary;
   cheapest_competitor: CheapestCompetitor | null;
 }
