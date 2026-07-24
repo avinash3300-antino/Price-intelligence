@@ -1390,30 +1390,26 @@ function SellerCard({
 }) {
   const mapped = options.filter((o) => o.mapping != null).length;
   return (
-    <div className="rounded-[12px] border border-[#EBECEF] bg-white">
-      <div className="px-5 py-3 bg-[#FAFBFC] border-b border-[#EFF0F2] flex items-center justify-between rounded-t-[12px]">
-        <div className="flex items-center gap-3">
-          <span className="w-[26px] h-[26px] rounded-[7px] bg-[#F2F3F5] border border-[#EAEBEE] grid place-items-center text-[12px] font-bold text-[#6B7280]">
-            {sellerDomain[0].toUpperCase()}
-          </span>
-          <div>
-            <div className="font-mono text-[13px] font-semibold text-[#1F2127]">
-              {sellerDomain}
-            </div>
-            <div className="text-[11px] text-[#8A8F98]">
-              {options.length} {options.length === 1 ? "option" : "options"}
-              {listingCount > 1 ? ` · ${listingCount} pages` : ""}
-            </div>
-          </div>
-        </div>
+    <div>
+      <div className="flex items-center gap-2.5 px-1 py-2">
+        <span className="w-[22px] h-[22px] rounded-[6px] bg-[#F2F3F5] border border-[#EAEBEE] grid place-items-center text-[11px] font-bold text-[#6B7280]">
+          {sellerDomain[0].toUpperCase()}
+        </span>
+        <span className="font-mono text-[12.5px] font-semibold text-[#3D424B]">
+          {sellerDomain}
+        </span>
+        <span className="text-[11px] text-[#9AA0A8]">
+          · {options.length} option{options.length === 1 ? "" : "s"}
+          {listingCount > 1 ? ` · ${listingCount} pages` : ""}
+        </span>
         {mapped > 0 && (
-          <span className="inline-flex items-center gap-1 px-2 py-[3px] rounded-[6px] text-[10.5px] font-semibold bg-[#E8F5EC] text-[#197A45] border border-[#BFE3CB]">
+          <span className="ml-auto inline-flex items-center gap-1 px-2 py-[3px] rounded-[6px] text-[10.5px] font-semibold bg-[#E8F5EC] text-[#197A45] border border-[#BFE3CB]">
             <Check className="w-2.5 h-2.5" strokeWidth={3} />
             {mapped} mapped
           </span>
         )}
       </div>
-      <ul className="divide-y divide-[#F1F2F4]">
+      <ul className="rounded-[10px] border border-[#EBECEF] bg-white divide-y divide-[#F1F2F4] overflow-hidden">
         {options.map((opt) => (
           <CompetitorRow
             key={opt.option_id}
@@ -1484,22 +1480,35 @@ function CompetitorRow({
       ? `/compare?productId=${productId}&raynaOptionId=${compareRaynaId}&competitorOptionId=${option.option_id}&date=${encodeURIComponent(chosenDate)}`
       : null;
 
+  const mappedName = option.mapping?.rayna_option_name ?? "";
+  const mappedNameShort =
+    mappedName.length > 36 ? mappedName.slice(0, 34) + "…" : mappedName;
   return (
-    <li className="px-5 py-3.5 hover:bg-[#FAFBFC]/60 transition-colors relative">
-      <div className="flex items-center justify-between gap-4">
+    <li
+      className={`relative pl-4 pr-3 py-3 transition-colors ${
+        mapped
+          ? "bg-[#F2FAF9] hover:bg-[#E8F5EC]/40"
+          : "hover:bg-[#FAFBFC]/60"
+      }`}
+    >
+      {mapped && (
+        <span
+          aria-hidden
+          className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#0E6F6A]"
+        />
+      )}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <a
-              href={option.listing_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[#1F2127] font-medium text-[13.5px] hover:text-[#0E6F6A] inline-flex items-center gap-1.5 line-clamp-2"
-            >
-              {option.name}
-              <ExternalLink className="w-3 h-3 opacity-40 shrink-0" />
-            </a>
-          </div>
-          <div className="flex items-center gap-2 text-[11.5px] text-[#8A8F98]">
+          <a
+            href={option.listing_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[#1F2127] font-medium text-[13px] hover:text-[#0E6F6A] inline-flex items-start gap-1.5 leading-snug"
+          >
+            <span className="line-clamp-2">{option.name}</span>
+            <ExternalLink className="w-3 h-3 opacity-40 shrink-0 mt-0.5" />
+          </a>
+          <div className="flex items-center gap-1.5 text-[11px] text-[#8A8F98] mt-1 flex-wrap">
             <span className="tnum font-semibold text-[#1F2127]">
               {fmtAED(option.price, option.currency)}
             </span>
@@ -1517,16 +1526,25 @@ function CompetitorRow({
                 <span className="font-mono text-[#5C6069]">{option.tier}</span>
               </>
             )}
+            {mapped && (
+              <>
+                <span className="text-[#D5D7DC]">·</span>
+                <span className="inline-flex items-center gap-1 text-[10.5px] text-[#197A45] font-semibold">
+                  <Check className="w-2.5 h-2.5" strokeWidth={3} />
+                  → {mappedNameShort}
+                </span>
+              </>
+            )}
           </div>
         </div>
 
-        <div className="shrink-0 flex items-center gap-2">
+        <div className="shrink-0 flex items-center gap-1.5">
           {compareUrl && (
             <a
               href={compareUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[11.5px] font-semibold bg-white text-[#0E6F6A] border border-[#9FD4CE] hover:bg-[#F2FAF9] hover:border-[#0E6F6A] transition-colors"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[7px] text-[11px] font-semibold bg-white text-[#0E6F6A] border border-[#DCEFEC] hover:bg-[#F2FAF9] hover:border-[#0E6F6A] transition-colors"
               title="Open side-by-side comparison in a new tab"
             >
               <ArrowLeftRight className="w-3 h-3" strokeWidth={2.5} />
@@ -1534,33 +1552,27 @@ function CompetitorRow({
             </a>
           )}
           {mapped ? (
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[8px] text-[11.5px] font-semibold bg-[#E8F5EC] text-[#197A45] border border-[#BFE3CB]">
-                <Check className="w-3 h-3" strokeWidth={3} />
-                Mapped → {option.mapping!.rayna_option_name.slice(0, 28)}
-                {option.mapping!.rayna_option_name.length > 28 ? "…" : ""}
-              </span>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={handleUnmap}
-                className="text-[#9AA0A8] hover:text-[#B5342C] disabled:opacity-40 p-1.5 rounded-[6px] hover:bg-[#FBEAE8]"
-                title="Unmap"
-              >
-                {busy ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <X className="w-3.5 h-3.5" />
-                )}
-              </button>
-            </div>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={handleUnmap}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[7px] text-[11px] font-semibold text-[#9AA0A8] hover:bg-[#FBEAE8] hover:text-[#B5342C] disabled:opacity-40 transition-colors"
+              title="Unmap"
+            >
+              {busy ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <X className="w-3 h-3" strokeWidth={2.5} />
+              )}
+              Unmap
+            </button>
           ) : showPopover ? (
             <button
               ref={buttonRef}
               type="button"
               disabled={busy}
               onClick={() => setOpen((v) => !v)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[11.5px] font-semibold bg-[#0E6F6A] text-white hover:bg-[#0B5853] shadow-sm shadow-[#0E6F6A]/20 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[7px] text-[11px] font-semibold bg-[#0E6F6A] text-white hover:bg-[#0B5853] shadow-sm shadow-[#0E6F6A]/20 disabled:opacity-50 transition-colors"
             >
               {busy ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -1577,7 +1589,7 @@ function CompetitorRow({
               type="button"
               disabled={busy || directRaynaId == null}
               onClick={() => directRaynaId != null && handleMap(directRaynaId)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[11.5px] font-semibold bg-[#0E6F6A] text-white hover:bg-[#0B5853] shadow-sm shadow-[#0E6F6A]/20 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-[7px] text-[11px] font-semibold bg-[#0E6F6A] text-white hover:bg-[#0B5853] shadow-sm shadow-[#0E6F6A]/20 disabled:opacity-50 transition-colors"
             >
               {busy ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
