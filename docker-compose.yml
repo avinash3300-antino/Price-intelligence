@@ -29,6 +29,11 @@ services:
     restart: unless-stopped
     depends_on:
       - api
+    environment:
+      # Runtime env for Next.js server-side fetches. Node needs an absolute URL,
+      # so we bypass nginx and hit the api container directly over the Docker
+      # network. Browser code still uses same-origin via NEXT_PUBLIC_API_URL="".
+      API_URL_INTERNAL: http://api:8001
     expose:
       - "3000"
     networks:

@@ -5,7 +5,13 @@
  * NEXT_PUBLIC_API_URL overrides the base URL if set, useful for prod.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001";
+// Server-side (Node, inside the web container during SSR) needs an absolute
+// URL — Node's fetch rejects relative paths. Browser code hits the same origin
+// so nginx can route /api/* to the api container.
+const API_BASE =
+  typeof window === "undefined"
+    ? process.env.API_URL_INTERNAL ?? "http://localhost:8001"
+    : process.env.NEXT_PUBLIC_API_URL ?? "";
 
 async function api<T>(path: string): Promise<T> {
   const r = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
