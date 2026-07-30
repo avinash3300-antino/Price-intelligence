@@ -43,7 +43,7 @@ export function CompetitorCard({
     competitor.basis !== "unknown";
 
   return (
-    <div className="rounded-[13px] border border-[#EBECEF] bg-white hover:shadow-sm transition-shadow">
+    <div className=" border border-[#E4E7EC] bg-white hover:shadow-sm transition-shadow">
       <div className="p-4">
         <div className="flex items-start justify-between gap-3 mb-2">
           <div className="min-w-0 flex-1">
@@ -52,30 +52,30 @@ export function CompetitorCard({
                 href={competitor.listingUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[13px] font-mono font-semibold text-[#1F2127] hover:text-[#EA580C] inline-flex items-center gap-1"
+                className="text-[13px] font-mono font-semibold text-[#101828] hover:text-[#EA580C] inline-flex items-center gap-1"
               >
                 {competitor.domain}
                 <ExternalLink className="w-3 h-3 opacity-50" />
               </a>
               <VerdictBadge verdict={verdict} confidence={confidence} />
               {basisMismatch && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[10.5px] font-semibold bg-[#FBF1DE] text-[#9A6510] border border-[#EFD8A6]">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5  text-[10.5px] font-semibold bg-[#FBF1DE] text-[#9A6510] border border-[#EFD8A6]">
                   <AlertTriangle className="w-3 h-3" />
                   basis mismatch
                 </span>
               )}
             </div>
-            <div className="text-[13px] text-[#3D424B] line-clamp-2 leading-snug">
+            <div className="text-[13px] text-[#344054] line-clamp-2 leading-snug">
               {competitor.name}
             </div>
-            <div className="text-[11px] text-[#9AA0A8] mt-1 font-mono">
+            <div className="text-[11px] text-[#98A2B3] mt-1 font-mono">
               {fmtBasis(competitor.basis)} ·{" "}
-              <span className="text-[#3D424B] font-semibold">
+              <span className="text-[#344054] font-semibold">
                 {fmtAED(competitor.price, competitor.currency)}
               </span>
               {competitor.price != null &&
                 (competitor.currency || "AED").toUpperCase() !== "AED" && (
-                  <span className="ml-1 text-[#B0B4BB]">
+                  <span className="ml-1 text-[#D0D5DD]">
                     ({fmtMoney(competitor.price, competitor.currency)})
                   </span>
                 )}
@@ -93,7 +93,7 @@ export function CompetitorCard({
         </div>
 
         {diffNotes && (
-          <div className="mt-3 text-[12.5px] text-[#5C6069] italic border-l-2 border-[#EBECEF] pl-3 leading-snug">
+          <div className="mt-3 text-[12.5px] text-[#475467] italic border-l-2 border-[#E4E7EC] pl-3 leading-snug">
             {diffNotes}
           </div>
         )}

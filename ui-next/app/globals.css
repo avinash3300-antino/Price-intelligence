@@ -1,49 +1,72 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-sans: var(--font-archivo), "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-heading: var(--font-archivo), "Inter", system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "SF Mono", Menlo, monospace;
 
-  /* surface — warmer, softer canvas */
-  --color-bg: #f8f7f3;
-  --color-card: #ffffff;
-  --color-card-soft: #fbfaf7;
-  --color-border: #e6e3dc;
-  --color-border-soft: #efece6;
+  /* v2 palette — cool slate + white surfaces */
+  --color-bg: #F8F9FB;
+  --color-surface: #FFFFFF;
+  --color-card: #FFFFFF;
+  --color-card-soft: #F9FAFB;
+  --color-border: #E4E7EC;
+  --color-border-soft: #F2F4F7;
+  --color-divider: #E4E7EC;
 
-  /* sidebar */
-  --color-sidebar: #FAFAF7;
-  --color-sidebar-active: #EDE9E0;
-  --color-sidebar-border: #E6E3DC;
-  --color-sidebar-text: #3D424B;
-  --color-sidebar-muted: #8A8F98;
-  --color-sidebar-section: #8A8F98;
+  /* Slate neutral ramp */
+  --color-neutral-100: #F9FAFB;
+  --color-neutral-200: #F2F4F7;
+  --color-neutral-300: #E4E7EC;
+  --color-neutral-400: #D0D5DD;
+  --color-neutral-500: #98A2B3;
+  --color-neutral-600: #667085;
+  --color-neutral-700: #475467;
+  --color-neutral-800: #344054;
+  --color-neutral-900: #101828;
 
-  /* text */
-  --color-text: #16181d;
-  --color-text-soft: #3d424b;
-  --color-text-muted: #5c6069;
-  --color-text-faint: #8a8f98;
-  --color-text-fainter: #9aa0a8;
-  --color-text-disabled: #a5aab2;
+  /* Accent — orange-600 (v2 primary) */
+  --color-accent: #EA580C;
+  --color-accent-100: #FFF4ED;
+  --color-accent-200: #FFE0D9;
+  --color-accent-300: #FED7AA;
+  --color-accent-400: #F97316;
+  --color-accent-500: #F97316;
+  --color-accent-600: #EA580C;
+  --color-accent-700: #C2410C;
+  --color-accent-800: #9A3412;
+  --color-accent-900: #7C2D12;
 
-  /* brand */
+  /* Kept teal aliases for backward compat */
   --color-teal: #EA580C;
   --color-teal-light: #F97316;
-  --color-teal-bg: #FFF7ED;
-  --color-teal-border: #F59E0B;
-  --color-teal-ring: #3D424B;
+  --color-teal-bg: #FFF4ED;
+  --color-teal-border: #FED7AA;
+  --color-teal-ring: #FFE0D9;
 
-  /* states */
-  --color-good: #197a45;
-  --color-good-bg: #e8f5ec;
-  --color-good-border: #bfe3cb;
-  --color-warn: #9a6510;
-  --color-warn-bg: #fbf1de;
-  --color-warn-border: #efd8a6;
-  --color-bad: #b5342c;
-  --color-bad-bg: #fbeae8;
-  --color-bad-border: #f1c7c2;
+  /* Text */
+  --color-text: #101828;
+  --color-text-soft: #344054;
+  --color-text-muted: #475467;
+  --color-text-faint: #667085;
+  --color-text-fainter: #98A2B3;
+  --color-text-disabled: #D0D5DD;
+
+  /* Semantic — bring green back for price-leader / mapped */
+  --color-good: #067647;
+  --color-good-bg: #ECFDF3;
+  --color-good-border: #ABEFC6;
+  --color-warn: #B54708;
+  --color-warn-bg: #FFFAEB;
+  --color-warn-border: #FEDF89;
+  --color-bad: #B42318;
+  --color-bad-bg: #FEF3F2;
+  --color-bad-border: #FECDCA;
+
+  /* Rounded corners restored — v2 uses 9px on buttons/pills, 12px on cards */
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
 }
 
 :root {
@@ -59,11 +82,16 @@ body {
   color: var(--color-text);
   -webkit-font-smoothing: antialiased;
   font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
   letter-spacing: -0.005em;
 }
 
-h1, h2, h3, h4 {
-  letter-spacing: -0.018em;
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 ::-webkit-scrollbar {
@@ -71,12 +99,12 @@ h1, h2, h3, h4 {
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cec9be;
+  background: #D0D5DD;
   border-radius: 6px;
   border: 3px solid var(--color-bg);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #b8b2a5;
+  background: #98A2B3;
 }
 ::-webkit-scrollbar-track {
   background: transparent;

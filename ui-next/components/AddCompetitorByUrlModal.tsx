@@ -110,19 +110,19 @@ export function AddCompetitorByUrlModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[640px] bg-white rounded-[14px] shadow-2xl ring-1 ring-black/5 border border-[#EBECEF] overflow-hidden"
+        className="w-full max-w-[640px] bg-white  shadow-2xl ring-1 ring-black/5 border border-[#E4E7EC] overflow-hidden"
       >
-        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-[#F1F2F4]">
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-[#F2F4F7]">
           <div>
-            <div className="text-[15px] font-semibold text-[#1F2127] flex items-center gap-2">
+            <div className="text-[15px] font-semibold text-[#101828] flex items-center gap-2">
               <LinkIcon className="w-4 h-4 text-[#EA580C]" />
               Add competitor by URL
             </div>
-            <div className="text-[12px] text-[#8A8F98] mt-1">
+            <div className="text-[12px] text-[#667085] mt-1">
               {raynaOptionName ? (
                 <>
                   Mapping target:{" "}
-                  <span className="font-semibold text-[#3D424B]">
+                  <span className="font-semibold text-[#344054]">
                     {raynaOptionName.length > 60
                       ? raynaOptionName.slice(0, 57) + "…"
                       : raynaOptionName}
@@ -137,7 +137,7 @@ export function AddCompetitorByUrlModal({
             type="button"
             onClick={onClose}
             disabled={stage.kind === "loading"}
-            className="text-[#8A8F98] hover:text-[#1F2127] p-1 rounded-md hover:bg-[#F4F5F7] disabled:opacity-40"
+            className="text-[#667085] hover:text-[#101828] p-1 rounded-[9px] hover:bg-[#F2F4F7] disabled:opacity-40"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -146,7 +146,7 @@ export function AddCompetitorByUrlModal({
 
         <div className="px-5 py-4">
           {disabledReason ? (
-            <div className="text-[13px] text-[#8A8F98] py-4">{disabledReason}</div>
+            <div className="text-[13px] text-[#667085] py-4">{disabledReason}</div>
           ) : stage.kind === "input" ? (
             <InputForm
               url={url}
@@ -156,7 +156,7 @@ export function AddCompetitorByUrlModal({
               onSubmit={() => submit()}
             />
           ) : stage.kind === "loading" ? (
-            <div className="flex items-center gap-2.5 text-[13px] text-[#5C6069] py-6">
+            <div className="flex items-center gap-2.5 text-[13px] text-[#475467] py-6">
               <Loader2 className="w-4 h-4 animate-spin" />
               {stage.label}
             </div>
@@ -193,7 +193,7 @@ function InputForm({
   return (
     <div className="space-y-3">
       <label className="block">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#5C6069]">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#475467]">
           Competitor product URL
         </span>
         <input
@@ -204,12 +204,12 @@ function InputForm({
             if (e.key === "Enter") onSubmit();
           }}
           placeholder="https://www.viator.com/tours/…"
-          className="mt-1 w-full px-3 py-2 rounded-[9px] border border-[#E2E3E7] focus:border-[#FDBA74] focus:outline-none text-[13px] font-mono text-[#1F2127] placeholder:text-[#B0B4BB]"
+          className="mt-1 w-full px-3 py-2  border border-[#E2E3E7] focus:border-[#FED7AA] focus:outline-none text-[13px] font-mono text-[#101828] placeholder:text-[#D0D5DD]"
           autoFocus
         />
       </label>
       <label className="block">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#5C6069]">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#475467]">
           Note (optional)
         </span>
         <input
@@ -217,14 +217,14 @@ function InputForm({
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="e.g. Sourced from partner ping"
-          className="mt-1 w-full px-3 py-2 rounded-[9px] border border-[#E2E3E7] focus:border-[#FDBA74] focus:outline-none text-[13px] text-[#1F2127] placeholder:text-[#B0B4BB]"
+          className="mt-1 w-full px-3 py-2  border border-[#E2E3E7] focus:border-[#FED7AA] focus:outline-none text-[13px] text-[#101828] placeholder:text-[#D0D5DD]"
         />
       </label>
       <div className="flex justify-end gap-2 pt-1">
         <button
           type="button"
           onClick={onSubmit}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[9px] text-[13px] font-semibold bg-[#FED7AA] text-black hover:bg-[#FDBA74] transition-colors"
+          className="inline-flex items-center gap-1.5 px-4 py-2  text-[13px] font-semibold bg-[#EA580C] text-white hover:bg-[#C2410C] transition-colors"
         >
           Fetch & extract
           <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.5} />
@@ -247,7 +247,7 @@ function PasteFallback({
 }) {
   return (
     <div className="space-y-3">
-      <div className="rounded-[10px] border border-[#EFD8A6] bg-[#FBF1DE] px-3.5 py-3 flex items-start gap-2 text-[12.5px] text-[#7A4F08] leading-snug">
+      <div className=" border border-[#EFD8A6] bg-[#FBF1DE] px-3.5 py-3 flex items-start gap-2 text-[12.5px] text-[#7A4F08] leading-snug">
         <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
         <div>
           <div className="font-semibold">Couldn&rsquo;t fetch the page automatically.</div>
@@ -259,7 +259,7 @@ function PasteFallback({
         </div>
       </div>
       <label className="block">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#5C6069] inline-flex items-center gap-1.5">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#475467] inline-flex items-center gap-1.5">
           <ClipboardPaste className="w-3.5 h-3.5" />
           Paste page content
         </span>
@@ -268,7 +268,7 @@ function PasteFallback({
           onChange={(e) => setPasted(e.target.value)}
           rows={10}
           placeholder="Paste the product page's description, inclusions, price, etc."
-          className="mt-1 w-full px-3 py-2 rounded-[9px] border border-[#E2E3E7] focus:border-[#FDBA74] focus:outline-none text-[12.5px] text-[#1F2127] placeholder:text-[#B0B4BB] font-mono leading-relaxed resize-y"
+          className="mt-1 w-full px-3 py-2  border border-[#E2E3E7] focus:border-[#FED7AA] focus:outline-none text-[12.5px] text-[#101828] placeholder:text-[#D0D5DD] font-mono leading-relaxed resize-y"
           autoFocus
         />
       </label>
@@ -277,7 +277,7 @@ function PasteFallback({
           type="button"
           disabled={pasted.trim().length < 200}
           onClick={onSubmit}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[9px] text-[13px] font-semibold bg-[#FED7AA] text-black hover:bg-[#FDBA74] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="inline-flex items-center gap-1.5 px-4 py-2  text-[13px] font-semibold bg-[#EA580C] text-white hover:bg-[#C2410C] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           title={
             pasted.trim().length < 200
               ? "Paste at least ~200 characters"
@@ -303,22 +303,22 @@ function ResultView({
     <div className="space-y-3">
       <div className="flex items-center gap-2 flex-wrap">
         <VerdictBadge verdict={data.verdict} confidence={data.confidence} />
-        <span className="text-[11px] text-[#8A8F98] font-mono">
+        <span className="text-[11px] text-[#667085] font-mono">
           {data.seller_domain}
         </span>
         {!data.saved_mapping && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[10.5px] font-semibold bg-[#FBF1DE] text-[#9A6510] border border-[#EFD8A6]">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5  text-[10.5px] font-semibold bg-[#FBF1DE] text-[#9A6510] border border-[#EFD8A6]">
             <AlertTriangle className="w-3 h-3" />
             competitor saved, not mapped
           </span>
         )}
       </div>
-      <div className="rounded-[10px] border border-[#EBECEF] bg-white px-4 py-3">
-        <div className="text-[13px] text-[#1F2127] leading-snug mb-1.5">
+      <div className=" border border-[#E4E7EC] bg-white px-4 py-3">
+        <div className="text-[13px] text-[#101828] leading-snug mb-1.5">
           {data.competitor_name}
         </div>
-        <div className="text-[12px] text-[#5C6069] tnum">
-          <span className="font-semibold text-[#1F2127]">
+        <div className="text-[12px] text-[#475467] tnum">
+          <span className="font-semibold text-[#101828]">
             {fmtMoney(data.competitor_price, data.competitor_currency)}
           </span>
           <span className="mx-1.5 text-[#D5D7DC]">·</span>
@@ -327,14 +327,14 @@ function ResultView({
           </span>
         </div>
       </div>
-      <div className="text-[12.5px] text-[#5C6069] italic border-l-2 border-[#EBECEF] pl-3 leading-snug">
+      <div className="text-[12.5px] text-[#475467] italic border-l-2 border-[#E4E7EC] pl-3 leading-snug">
         {data.diff_notes}
       </div>
       <div className="flex justify-end pt-1">
         <button
           type="button"
           onClick={onDone}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[9px] text-[13px] font-semibold bg-[#FED7AA] text-black hover:bg-[#FDBA74] transition-colors"
+          className="inline-flex items-center gap-1.5 px-4 py-2  text-[13px] font-semibold bg-[#EA580C] text-white hover:bg-[#C2410C] transition-colors"
         >
           Done
         </button>

@@ -340,7 +340,7 @@ function DatePill({
     <button
       type="button"
       onClick={openPicker}
-      className="relative inline-flex items-center gap-2 px-3.5 py-2 rounded-[10px] text-[13px] font-semibold border border-[#F59E0B] bg-[#FFF7ED] text-[#EA580C] hover:bg-white transition-all cursor-pointer"
+      className="relative inline-flex items-center gap-2 px-3.5 py-2 text-[13px] font-semibold border border-[#E4E7EC] bg-white text-[#101828] hover:border-[#EA580C] transition-all cursor-pointer"
     >
       <Calendar className="w-3.5 h-3.5" />
       <span>{isToday ? `${displayVal} (today)` : displayVal}</span>
@@ -398,15 +398,15 @@ function SelectPill({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-[10px] text-[13px] font-semibold border transition-all ${
+        className={`inline-flex items-center gap-2 px-3.5 py-2  text-[13px] font-semibold border transition-all ${
           disabled
-            ? "bg-[#F6F7F9] text-[#B0B4BB] border-[#E7E8EB] cursor-not-allowed"
+            ? "bg-[#F6F7F9] text-[#D0D5DD] border-[#E7E8EB] cursor-not-allowed"
             : isEmpty
-              ? "bg-white border-[#E2E3E7] text-[#5C6069] hover:border-[#F59E0B] hover:text-[#EA580C]"
-              : "bg-[#FFF7ED] border-[#F59E0B] text-[#EA580C] hover:bg-white"
+              ? "bg-white border-[#E4E7EC] text-[#475467] hover:border-[#EA580C] hover:text-[#101828]"
+              : "bg-white border-[#E4E7EC] text-[#101828] hover:border-[#EA580C]"
         }`}
       >
-        <span className={disabled ? "text-[#C7CACF]" : "text-[#9AA0A8]"}>{icon}</span>
+        <span className={disabled ? "text-[#C7CACF]" : "text-[#98A2B3]"}>{icon}</span>
         {valuePrefix && <span className="text-[15px] leading-none">{valuePrefix}</span>}
         <span className={isEmpty ? "font-medium" : ""}>{value ?? placeholder}</span>
         {value && !disabled && (
@@ -416,7 +416,7 @@ function SelectPill({
               e.stopPropagation();
               onSelect(null);
             }}
-            className="text-[#9AA0A8] hover:text-[#B5342C] ml-0.5"
+            className="text-[#98A2B3] hover:text-[#B5342C] ml-0.5"
             title="Clear"
           >
             <X className="w-3 h-3" />
@@ -502,17 +502,17 @@ function PillPopover({
     <div
       ref={popRef}
       style={{ position: "fixed", top: pos.top, left: pos.left, width: 320, zIndex: 60 }}
-      className="rounded-[12px] border border-[#EBECEF] bg-white shadow-xl ring-1 ring-black/5"
+      className=" border border-[#E4E7EC] bg-white shadow-xl ring-1 ring-black/5"
     >
-      <div className="p-2 border-b border-[#F1F2F4]">
+      <div className="p-2 border-b border-[#F2F4F7]">
         <div className="relative">
-          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#9AA0A8]" />
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
           <input
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={searchPlaceholder}
-            className="w-full pl-8 pr-2.5 py-1.5 rounded-[7px] border border-[#E2E3E7] text-[12.5px] focus:outline-none focus:border-[#FDBA74]"
+            className="w-full pl-8 pr-2.5 py-1.5  border border-[#E2E3E7] text-[12.5px] focus:outline-none focus:border-[#FED7AA]"
           />
         </div>
       </div>
@@ -526,14 +526,14 @@ function PillPopover({
                 onClick={() => onSelect(o.label)}
                 className={`w-full text-left px-3.5 py-2 flex items-center gap-2 text-[13px] transition-colors ${
                   isSel
-                    ? "bg-[#FFF7ED] text-[#EA580C] font-semibold"
-                    : "text-[#1F2127] hover:bg-[#FAFBFC]"
+                    ? "bg-[#FFF4ED] text-[#EA580C] font-semibold"
+                    : "text-[#101828] hover:bg-[#F9FAFB]"
                 }`}
               >
                 {o.hint && <span className="text-[15px] leading-none">{o.hint}</span>}
                 <span className="flex-1 truncate">{o.label}</span>
                 {o.count != null && (
-                  <span className="tnum text-[11px] text-[#9AA0A8]">{o.count}</span>
+                  <span className="tnum text-[11px] text-[#98A2B3]">{o.count}</span>
                 )}
                 {isSel && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
               </button>
@@ -541,7 +541,7 @@ function PillPopover({
           );
         })}
         {filtered.length === 0 && (
-          <li className="px-3.5 py-4 text-[12px] text-[#9AA0A8] text-center">
+          <li className="px-3.5 py-4 text-[12px] text-[#98A2B3] text-center">
             No matches for &ldquo;{query}&rdquo;
           </li>
         )}
@@ -662,19 +662,19 @@ function ProductRow({
         type="button"
         onClick={onClick}
         disabled={!hasOptions}
-        className={`w-full text-left px-3 py-2.5 rounded-[9px] transition-colors flex items-start gap-2.5 ${
+        className={`w-full text-left px-3 py-2.5  transition-colors flex items-start gap-2.5 ${
           selected
-            ? "bg-[#FED7AA] text-black shadow-sm"
+            ? "bg-white text-[#101828] shadow-sm border-l-[3px] border-[#EA580C]"
             : hasOptions
-              ? "hover:bg-[#FFF7ED] text-[#1F2127]"
-              : "text-[#9AA0A8] opacity-70 cursor-not-allowed"
+              ? "hover:bg-[#FFF4ED] text-[#101828]"
+              : "text-[#98A2B3] opacity-70 cursor-not-allowed"
         }`}
       >
         <span
-          className={`w-[26px] h-[26px] shrink-0 rounded-[7px] grid place-items-center text-[15px] leading-none mt-0.5 ${
+          className={`w-[26px] h-[26px] shrink-0  grid place-items-center text-[15px] leading-none mt-0.5 ${
             selected
               ? "bg-white/20"
-              : "bg-[#FFF7ED] border border-[#3D424B]"
+              : "bg-[#FFF4ED] border border-[#3D424B]"
           }`}
         >
           {emojiForProduct(p.name)}
@@ -683,7 +683,7 @@ function ProductRow({
           <div className="flex items-baseline gap-1.5 mb-0.5">
             <span
               className={`text-[9px] font-mono uppercase tracking-[0.06em] ${
-                selected ? "text-black/60" : "text-[#9AA0A8]"
+                selected ? "text-black/60" : "text-[#98A2B3]"
               }`}
             >
               #{p.id}
@@ -691,7 +691,7 @@ function ProductRow({
             {p.type && (
               <span
                 className={`text-[9px] font-mono uppercase tracking-[0.05em] ${
-                  selected ? "text-black/45" : "text-[#B0B4BB]"
+                  selected ? "text-black/45" : "text-[#D0D5DD]"
                 }`}
               >
                 {p.type}
@@ -703,7 +703,7 @@ function ProductRow({
           </div>
           <div
             className={`text-[10.5px] mt-1 flex items-center gap-1.5 ${
-              selected ? "text-black/65" : "text-[#8A8F98]"
+              selected ? "text-black/65" : "text-[#667085]"
             }`}
           >
             <span className="tnum font-semibold">
@@ -725,14 +725,14 @@ function ProductRow({
                     options_mapped_count === 0
                       ? selected
                         ? "text-black/45"
-                        : "text-[#9AA0A8]"
+                        : "text-[#98A2B3]"
                       : options_mapped_count === option_count
                         ? selected
                           ? "text-white"
                           : "text-[#EA580C]"
                         : selected
                           ? "text-black/80"
-                          : "text-[#1F2127]"
+                          : "text-[#101828]"
                   }`}
                   title={
                     options_mapped_count === 0
@@ -838,7 +838,7 @@ function OptionPanel({
       {!product ? (
         <PanelHint>Pick a product to see its bookable options.</PanelHint>
       ) : error ? (
-        <div className="rounded-[10px] border border-[#F1C7C2] bg-[#FBEAE8] px-3 py-2.5 text-[12px] text-[#B5342C] mt-1">
+        <div className=" border border-[#F1C7C2] bg-[#FBEAE8] px-3 py-2.5 text-[12px] text-[#B5342C] mt-1">
           {error}
         </div>
       ) : options == null ? (
@@ -902,16 +902,16 @@ function OptionRow({
       <button
         type="button"
         onClick={onClick}
-        className={`w-full text-left px-3 py-2.5 rounded-[9px] transition-colors ${
+        className={`w-full text-left px-3 py-2.5  transition-colors ${
           selected
-            ? "bg-[#FED7AA] text-black shadow-sm"
-            : "hover:bg-[#FFF7ED] text-[#1F2127]"
+            ? "bg-white text-[#101828] shadow-sm border-l-[3px] border-[#EA580C]"
+            : "hover:bg-[#FFF4ED] text-[#101828]"
         }`}
       >
         <div className="flex items-start justify-between gap-2 mb-1">
           <div
             className={`text-[9px] font-mono uppercase tracking-[0.06em] ${
-              selected ? "text-black/60" : "text-[#9AA0A8]"
+              selected ? "text-black/60" : "text-[#98A2B3]"
             }`}
           >
             variant #{option.option_id.toString().slice(-5)}
@@ -933,7 +933,7 @@ function OptionRow({
         <div className="flex items-baseline gap-2 mt-1.5">
           <span
             className={`tnum text-[14px] font-semibold ${
-              selected ? "text-white" : "text-[#16181D]"
+              selected ? "text-white" : "text-[#101828]"
             }`}
           >
             {option.price != null
@@ -942,14 +942,14 @@ function OptionRow({
           </span>
           <span
             className={`text-[10.5px] font-mono ${
-              selected ? "text-black/60" : "text-[#8A8F98]"
+              selected ? "text-black/60" : "text-[#667085]"
             }`}
           >
             {fmtBasis(option.pricing_basis)}
           </span>
           <span
             className={`ml-auto text-[10.5px] ${
-              selected ? "text-black/60" : "text-[#8A8F98]"
+              selected ? "text-black/60" : "text-[#667085]"
             }`}
           >
             <span className="tnum font-semibold">{option.seller_count}</span>{" "}
@@ -975,18 +975,18 @@ function PanelShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white border border-[#EBECEF] rounded-[13px] flex flex-col overflow-hidden">
-      <div className="px-4 py-3 border-b border-[#F1F2F4] flex items-baseline gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.09em] text-[#5C6069]">
+    <div className="bg-white border border-[#E4E7EC]  flex flex-col overflow-hidden">
+      <div className="px-4 py-3 border-b border-[#F2F4F7] flex items-baseline gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.09em] text-[#475467]">
           {title}
         </span>
         {count != null && (
-          <span className="tnum text-[11px] text-[#9AA0A8]">
+          <span className="tnum text-[11px] text-[#98A2B3]">
             {count}
           </span>
         )}
         {subtitle && (
-          <span className="text-[11px] text-[#9AA0A8] truncate ml-1">
+          <span className="text-[11px] text-[#98A2B3] truncate ml-1">
             {subtitle}
           </span>
         )}
@@ -998,7 +998,7 @@ function PanelShell({
 
 function PanelHint({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[12px] text-[#8A8F98] px-3 py-6 text-center flex-1 flex items-center justify-center">
+    <div className="text-[12px] text-[#667085] px-3 py-6 text-center flex-1 flex items-center justify-center">
       <span>{children}</span>
     </div>
   );
@@ -1015,18 +1015,18 @@ function ListSearch({
 }) {
   return (
     <div className="relative px-1">
-      <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#9AA0A8] pointer-events-none" />
+      <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3] pointer-events-none" />
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full pl-8 pr-8 py-1.5 rounded-[8px] border border-[#E2E3E7] bg-white text-[12.5px] text-[#1F2127] placeholder:text-[#9AA0A8] focus:outline-none focus:border-[#FDBA74]"
+        className="w-full pl-8 pr-8 py-1.5  border border-[#E2E3E7] bg-white text-[12.5px] text-[#101828] placeholder:text-[#98A2B3] focus:outline-none focus:border-[#FED7AA]"
       />
       {value && (
         <button
           type="button"
           onClick={() => onChange("")}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9AA0A8] hover:text-[#5C6069] p-0.5"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-[#98A2B3] hover:text-[#475467] p-0.5"
           title="Clear"
         >
           <X className="w-3 h-3" />
@@ -1038,7 +1038,7 @@ function ListSearch({
 
 function EmptyHint({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-[14px] border border-dashed border-[#D5D7DC] bg-white px-8 py-12 text-center text-[13px] text-[#8A8F98] mt-4">
+    <div className=" border border-dashed border-[#D5D7DC] bg-white px-8 py-12 text-center text-[13px] text-[#667085] mt-4">
       {children}
     </div>
   );
@@ -1054,19 +1054,19 @@ function RightPane({
   chosenDate: string;
 }) {
   return (
-    <div className="bg-white border border-[#EBECEF] rounded-[13px] overflow-y-auto min-h-0">
+    <div className="bg-white border border-[#E4E7EC]  overflow-y-auto min-h-0">
       {chosenOption ? (
         <ComparePanel chosenOption={chosenOption} chosenDate={chosenDate} />
       ) : (
         <div className="h-full flex items-center justify-center px-10 py-16 text-center">
           <div>
-            <div className="w-[52px] h-[52px] rounded-[14px] bg-[#FFF7ED] border border-[#3D424B] grid place-items-center mx-auto mb-4 text-[24px]">
+            <div className="w-[52px] h-[52px]  bg-[#FFF4ED] border border-[#3D424B] grid place-items-center mx-auto mb-4 text-[24px]">
               🎯
             </div>
-            <div className="text-[15px] font-semibold text-[#1F2127] mb-1.5">
+            <div className="text-[15px] font-semibold text-[#101828] mb-1.5">
               Pick an option to see competitors
             </div>
-            <p className="text-[12.5px] text-[#8A8F98] max-w-[320px] leading-relaxed">
+            <p className="text-[12.5px] text-[#667085] max-w-[320px] leading-relaxed">
               Choose a country, city, product, and one bookable option on the
               left. The comparable competitor prices will show up right here.
             </p>
@@ -1172,12 +1172,12 @@ function ComparePanel({
   return (
     <div className="p-5">
       {loading && !workspace ? (
-        <div className="flex items-center gap-2 text-[#8A8F98] px-2 py-12 text-[13px]">
+        <div className="flex items-center gap-2 text-[#667085] px-2 py-12 text-[13px]">
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading competitors…
         </div>
       ) : error ? (
-        <div className="rounded-[12px] border border-[#F1C7C2] bg-[#FBEAE8] px-5 py-4 text-[13px] text-[#B5342C]">
+        <div className=" border border-[#F1C7C2] bg-[#FBEAE8] px-5 py-4 text-[13px] text-[#B5342C]">
           {error}
         </div>
       ) : workspace ? (
@@ -1256,24 +1256,24 @@ function WorkspacePanel({
     <div>
       <div className="flex items-start justify-between mb-2 gap-4">
         <div className="min-w-0">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.09em] text-[#5C6069] mb-1.5">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.09em] text-[#475467] mb-1.5">
             Comparing
           </div>
-          <h2 className="text-[20px] font-semibold text-[#1F2127] -tracking-[0.02em] leading-tight">
+          <h2 className="text-[20px] font-semibold text-[#101828] -tracking-[0.02em] leading-tight">
             {product.name}
           </h2>
-          <div className="text-[12.5px] text-[#8A8F98] mt-1">
+          <div className="text-[12.5px] text-[#667085] mt-1">
             {product.city}, {product.country} · {product.currency}
           </div>
         </div>
         <div className="text-right shrink-0">
-          <div className="text-[10.5px] uppercase tracking-[0.06em] text-[#9AA0A8] font-semibold">
+          <div className="text-[10.5px] uppercase tracking-[0.06em] text-[#98A2B3] font-semibold">
             Mapped
           </div>
-          <div className="tnum text-[22px] font-semibold text-[#16181D] mt-0.5">
+          <div className="tnum text-[22px] font-semibold text-[#101828] mt-0.5">
             {mappedCount}
             <span className="text-[#D5D7DC] mx-1">/</span>
-            <span className="text-[#9AA0A8]">{total_competitor_options}</span>
+            <span className="text-[#98A2B3]">{total_competitor_options}</span>
           </div>
         </div>
       </div>
@@ -1284,7 +1284,7 @@ function WorkspacePanel({
         <>
           <div className="mt-5 mb-6">
             <div className="flex items-center gap-3 mb-3">
-              <h3 className="text-[11px] font-semibold uppercase tracking-[0.09em] text-[#5C6069]">
+              <h3 className="text-[11px] font-semibold uppercase tracking-[0.09em] text-[#475467]">
                 {focusOptionId
                   ? "Your option (map target)"
                   : `Your options (${rayna_options.length})`}
@@ -1308,12 +1308,12 @@ function WorkspacePanel({
 
           <div>
             <div className="flex items-center gap-3 mb-3">
-              <h3 className="text-[11px] font-semibold uppercase tracking-[0.09em] text-[#5C6069]">
+              <h3 className="text-[11px] font-semibold uppercase tracking-[0.09em] text-[#475467]">
                 Competitors
               </h3>
               <div className="flex-1 h-px bg-[#EBECEF]" />
               {sellers.length > 0 && (
-                <span className="text-[11px] text-[#9AA0A8]">
+                <span className="text-[11px] text-[#98A2B3]">
                   {sellers.length} sellers · {total_competitor_options} options
                 </span>
               )}
@@ -1321,7 +1321,7 @@ function WorkspacePanel({
                 type="button"
                 onClick={() => setUrlModalOpen(true)}
                 disabled={selectedRaynaId == null}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[7px] text-[11.5px] font-semibold bg-white text-[#EA580C] border border-[#F59E0B] hover:bg-[#FFF7ED] hover:border-[#FDBA74] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1  text-[11.5px] font-semibold bg-white text-[#EA580C] border border-[#F59E0B] hover:bg-[#FFF4ED] hover:border-[#FED7AA] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 title={
                   selectedRaynaId == null
                     ? "Select a Rayna option first"
@@ -1386,10 +1386,10 @@ function RaynaOptionCard({
     <button
       type="button"
       onClick={onSelect}
-      className={`text-left rounded-[12px] px-4 py-3 transition-all w-full ${
+      className={`text-left  px-4 py-3 transition-all w-full ${
         selected
-          ? "bg-gradient-to-br from-[#FFF7ED] to-[#FFF7ED] border-[1.5px] border-[#FDBA74] shadow-[0_1px_2px_rgba(249,115,22,0.06)]"
-          : "bg-white border border-[#E6E3DC] hover:border-[#CFCABC] hover:shadow-sm"
+          ? "bg-gradient-to-br from-[#FFF4ED] to-[#FFF4ED] border-[1.5px] border-[#FED7AA] shadow-[0_1px_2px_rgba(249,115,22,0.06)]"
+          : "bg-white border border-[#E4E7EC] hover:border-[#CFCABC] hover:shadow-sm"
       }`}
     >
       <div className="flex items-center justify-between gap-2 mb-1">
@@ -1402,13 +1402,13 @@ function RaynaOptionCard({
         </div>
         <div className="flex items-center gap-1.5">
           {mappedCount > 0 && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-[2px] rounded-[5px] text-[10px] font-semibold bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]">
+            <span className="inline-flex items-center gap-1 px-1.5 py-[2px]  text-[10px] font-semibold bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]">
               <Check className="w-2.5 h-2.5" strokeWidth={3} />
               {mappedCount}
             </span>
           )}
           {selected && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-[2px] rounded-[5px] text-[9.5px] font-bold uppercase tracking-[0.06em] bg-[#C2410C] text-white">
+            <span className="inline-flex items-center gap-1 px-1.5 py-[2px]  text-[9.5px] font-bold uppercase tracking-[0.06em] bg-[#C2410C] text-white">
               Target
             </span>
           )}
@@ -1416,13 +1416,13 @@ function RaynaOptionCard({
       </div>
       <div
         className={`text-[14px] font-semibold leading-snug ${
-          selected ? "text-[#7C2D12]" : "text-[#1A1F1E]"
+          selected ? "text-[#9A3412]" : "text-[#1A1F1E]"
         }`}
       >
         {option.name}
       </div>
       <div className="flex items-baseline gap-2 mt-1.5">
-        <span className="tnum text-[17px] font-semibold text-[#7C2D12]">
+        <span className="tnum text-[17px] font-semibold text-[#9A3412]">
           {fmtMoney(option.price, option.currency)}
         </span>
         <span className="text-[11px] text-[#6A6F6D]">
@@ -1462,10 +1462,10 @@ function SellerCard({
       <div className="flex items-center gap-3 mb-3">
         <div className="flex items-center gap-2 shrink-0">
           <span
-            className={`w-[24px] h-[24px] rounded-[7px] grid place-items-center text-[11px] font-bold ${
+            className={`w-[24px] h-[24px]  grid place-items-center text-[11px] font-bold ${
               fullyMapped
                 ? "bg-[#C2410C] text-white"
-                : "bg-[#F3F0E8] text-[#5D6260] border border-[#E6E3DC]"
+                : "bg-[#F3F0E8] text-[#5D6260] border border-[#E4E7EC]"
             }`}
           >
             {sellerDomain[0].toUpperCase()}
@@ -1474,7 +1474,7 @@ function SellerCard({
             {sellerDomain}
           </span>
         </div>
-        <div className="flex-1 h-px bg-[#E6E3DC]" />
+        <div className="flex-1 h-px bg-[#E4E7EC]" />
         <div className="flex items-center gap-2 shrink-0 text-[11px] text-[#6A6F6D]">
           <span>
             {options.length} option{options.length === 1 ? "" : "s"}
@@ -1584,7 +1584,7 @@ function CompetitorRow({
     const diff = compAED - raynaAED;
     const pct = (diff / raynaAED) * 100;
     if (Math.abs(diff) < 0.5) {
-      gap = { pct, color: "#3F4644", bg: "#F3F0E8", border: "#E6E3DC", label: "match", Arrow: Minus };
+      gap = { pct, color: "#3F4644", bg: "#F3F0E8", border: "#E4E7EC", label: "match", Arrow: Minus };
     } else if (diff > 0) {
       // Competitor is more expensive → Rayna wins
       gap = { pct, color: "#15803D", bg: "#F0FDF4", border: "#BBF7D0", label: "we win", Arrow: ArrowUp };
@@ -1595,10 +1595,10 @@ function CompetitorRow({
 
   return (
     <div
-      className={`relative rounded-[12px] transition-all overflow-hidden ${
+      className={`relative  transition-all overflow-hidden ${
         mapped
-          ? "bg-gradient-to-br from-[#FFF7ED] to-[#FFF7ED] border border-[#FDBA74] shadow-[0_1px_2px_rgba(249,115,22,0.06)]"
-          : "bg-white border border-[#E6E3DC] hover:border-[#CFCABC] hover:shadow-sm"
+          ? "bg-gradient-to-br from-[#FFF4ED] to-[#FFF4ED] border border-[#FED7AA] shadow-[0_1px_2px_rgba(249,115,22,0.06)]"
+          : "bg-white border border-[#E4E7EC] hover:border-[#CFCABC] hover:shadow-sm"
       }`}
     >
       {mapped && (
@@ -1607,12 +1607,12 @@ function CompetitorRow({
             aria-hidden
             className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#C2410C]"
           />
-          <div className="px-4 pt-2.5 pb-1.5 flex items-center gap-2 border-b border-[#FED7AA]/60 bg-[#FFF7ED]/40">
+          <div className="px-4 pt-2.5 pb-1.5 flex items-center gap-2 border-b border-[#FFE0D9]/60 bg-[#FFF4ED]/40">
             <span className="inline-flex items-center gap-1 px-2 py-[2px] rounded-full text-[10.5px] font-semibold bg-[#C2410C] text-white">
               <Check className="w-2.5 h-2.5" strokeWidth={3} />
               Mapped
             </span>
-            <span className="text-[11.5px] text-[#7C2D12] font-medium truncate">
+            <span className="text-[11.5px] text-[#9A3412] font-medium truncate">
               → {mappedName}
             </span>
           </div>
@@ -1649,7 +1649,7 @@ function CompetitorRow({
                 href={compareUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-[8px] text-[12px] font-medium text-[#4A4F4D] hover:bg-[#F3F0E8] hover:text-[#1A1F1E] transition-colors"
+                className="inline-flex items-center gap-1.5 px-2.5 py-2  text-[12px] font-medium text-[#4A4F4D] hover:bg-[#F3F0E8] hover:text-[#1A1F1E] transition-colors"
                 title="Open side-by-side comparison in a new tab"
               >
                 <ArrowLeftRight className="w-3.5 h-3.5" strokeWidth={2} />
@@ -1661,7 +1661,7 @@ function CompetitorRow({
                 type="button"
                 disabled={busy}
                 onClick={handleUnmap}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-[8px] text-[12px] font-semibold text-[#B91C1C] bg-white border border-[#FCA5A5]/60 hover:bg-[#FEF2F2] hover:border-[#B91C1C] disabled:opacity-40 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-2  text-[12px] font-semibold text-[#B91C1C] bg-white border border-[#FCA5A5]/60 hover:bg-[#FEF2F2] hover:border-[#B91C1C] disabled:opacity-40 transition-colors"
                 title="Remove this mapping"
               >
                 {busy ? (
@@ -1677,7 +1677,7 @@ function CompetitorRow({
                 type="button"
                 disabled={busy}
                 onClick={() => setOpen((v) => !v)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-[8px] text-[12px] font-semibold bg-[#C2410C] text-white hover:bg-[#0D5F5A] shadow-sm disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-2  text-[12px] font-semibold bg-[#C2410C] text-white hover:bg-[#0D5F5A] shadow-sm disabled:opacity-50 transition-colors"
               >
                 {busy ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1694,7 +1694,7 @@ function CompetitorRow({
                 type="button"
                 disabled={busy || directRaynaId == null}
                 onClick={() => directRaynaId != null && handleMap(directRaynaId)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-[8px] text-[12px] font-semibold bg-[#C2410C] text-white hover:bg-[#0D5F5A] shadow-sm disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-2  text-[12px] font-semibold bg-[#C2410C] text-white hover:bg-[#0D5F5A] shadow-sm disabled:opacity-50 transition-colors"
               >
                 {busy ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1812,9 +1812,9 @@ function RaynaOptionPopover({
     <div
       ref={popRef}
       style={{ position: "fixed", top: pos.top, left: pos.left, width: 340, zIndex: 60 }}
-      className="rounded-[12px] border border-[#EBECEF] bg-white shadow-xl ring-1 ring-black/5"
+      className=" border border-[#E4E7EC] bg-white shadow-xl ring-1 ring-black/5"
     >
-      <div className="px-4 py-2.5 border-b border-[#F1F2F4] text-[10px] uppercase tracking-[0.08em] font-semibold text-[#8A8F98]">
+      <div className="px-4 py-2.5 border-b border-[#F2F4F7] text-[10px] uppercase tracking-[0.08em] font-semibold text-[#667085]">
         Map to which Rayna option?
       </div>
       <ul className="max-h-72 overflow-y-auto">
@@ -1823,12 +1823,12 @@ function RaynaOptionPopover({
             <button
               type="button"
               onClick={() => onPick(ro.id)}
-              className="w-full text-left px-4 py-3 hover:bg-[#FFF7ED] transition-colors"
+              className="w-full text-left px-4 py-3 hover:bg-[#FFF4ED] transition-colors"
             >
-              <div className="font-medium text-[#1F2127] text-[13px] leading-snug line-clamp-2 mb-1">
+              <div className="font-medium text-[#101828] text-[13px] leading-snug line-clamp-2 mb-1">
                 {ro.name}
               </div>
-              <div className="text-[11px] text-[#8A8F98] font-mono">
+              <div className="text-[11px] text-[#667085] font-mono">
                 {fmtMoney(ro.price, ro.currency)} · {fmtBasis(ro.pricing_basis)}
               </div>
             </button>
@@ -1838,7 +1838,7 @@ function RaynaOptionPopover({
       <button
         type="button"
         onClick={onClose}
-        className="w-full text-[11px] text-[#8A8F98] hover:text-[#3D424B] py-2.5 border-t border-[#F1F2F4]"
+        className="w-full text-[11px] text-[#667085] hover:text-[#344054] py-2.5 border-t border-[#F2F4F7]"
       >
         Cancel
       </button>

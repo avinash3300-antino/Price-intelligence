@@ -129,10 +129,10 @@ export function CompareActionBar({
   }
 
   return (
-    <div className="rounded-[13px] border border-[#EBECEF] bg-white px-5 py-4 flex items-center gap-4 flex-wrap">
+    <div className=" border border-[#E4E7EC] bg-white px-5 py-4 flex items-center gap-4 flex-wrap">
       {mappedToThis ? (
         <>
-          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-[8px] text-[12.5px] font-semibold bg-[#FFF7ED] text-[#C2410C] border border-[#FDBA74]">
+          <span className="inline-flex items-center gap-2 px-3 py-1.5  text-[12.5px] font-semibold bg-[#FFF4ED] text-[#C2410C] border border-[#FED7AA]">
             <Check className="w-3.5 h-3.5" strokeWidth={3} />
             Mapped to {truncate(raynaOptionName, 40)}
           </span>
@@ -140,7 +140,7 @@ export function CompareActionBar({
             type="button"
             disabled={busy}
             onClick={() => doUnmap(existingMapping!.mapping_id)}
-            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[12px] font-semibold text-[#9AA0A8] hover:bg-[#FBEAE8] hover:text-[#B5342C] disabled:opacity-50 transition-colors"
+            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5  text-[12px] font-semibold text-[#98A2B3] hover:bg-[#FBEAE8] hover:text-[#B5342C] disabled:opacity-50 transition-colors"
           >
             {busy ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -166,7 +166,7 @@ export function CompareActionBar({
             type="button"
             disabled={busy}
             onClick={doRemap}
-            className="ml-auto inline-flex items-center gap-1.5 px-4 py-2 rounded-[9px] text-[12.5px] font-semibold bg-[#FED7AA] text-black hover:bg-[#FDBA74] shadow-sm shadow-[#F97316]/15 disabled:opacity-50 transition-colors"
+            className="ml-auto inline-flex items-center gap-1.5 px-4 py-2  text-[12.5px] font-semibold bg-[#EA580C] text-white hover:bg-[#C2410C] shadow-sm shadow-[#F97316]/15 disabled:opacity-50 transition-colors"
           >
             {busy ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -178,9 +178,9 @@ export function CompareActionBar({
         </>
       ) : (
         <>
-          <div className="text-[12.5px] text-[#5C6069]">
+          <div className="text-[12.5px] text-[#475467]">
             Confirm this is a like-for-like match for{" "}
-            <span className="font-semibold text-[#1F2127]">
+            <span className="font-semibold text-[#101828]">
               {truncate(raynaOptionName, 40)}
             </span>
             .
@@ -189,7 +189,7 @@ export function CompareActionBar({
             type="button"
             disabled={busy}
             onClick={doMap}
-            className="ml-auto inline-flex items-center gap-1.5 px-4 py-2 rounded-[9px] text-[12.5px] font-semibold bg-[#FED7AA] text-black hover:bg-[#FDBA74] shadow-sm shadow-[#F97316]/15 disabled:opacity-50 transition-colors"
+            className="ml-auto inline-flex items-center gap-1.5 px-4 py-2  text-[12.5px] font-semibold bg-[#EA580C] text-white hover:bg-[#C2410C] shadow-sm shadow-[#F97316]/15 disabled:opacity-50 transition-colors"
           >
             {busy ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />

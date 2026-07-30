@@ -20,9 +20,9 @@ export default async function ComparisonPage() {
         {pipeline.needs_review > 0 && (
           <Link
             href="/review"
-            className="mt-[22px] w-full flex items-center gap-3.5 bg-gradient-to-r from-[#FFF9EC] to-[#FFFDF8] border border-[#F1DFB4] rounded-[13px] px-[18px] py-[15px] hover:border-[#E6CB87] hover:shadow-[0_2px_10px_rgba(193,150,42,0.1)] transition-all"
+            className="mt-[22px] w-full flex items-center gap-3.5 bg-gradient-to-r from-[#FFF9EC] to-[#FFFDF8] border border-[#F1DFB4]  px-[18px] py-[15px] hover:border-[#E6CB87] hover:shadow-[0_2px_10px_rgba(193,150,42,0.1)] transition-all"
           >
-            <span className="w-[38px] h-[38px] shrink-0 rounded-[10px] bg-[#F6E2AE] text-[#8A5B0A] flex items-center justify-center">
+            <span className="w-[38px] h-[38px] shrink-0  bg-[#F6E2AE] text-[#8A5B0A] flex items-center justify-center">
               <Flag className="w-[18px] h-[18px]" strokeWidth={2} />
             </span>
             <div className="flex-1 text-left">
@@ -48,14 +48,14 @@ export default async function ComparisonPage() {
               <h2 className="text-[16px] font-semibold -tracking-[0.01em]">
                 Tracked products
               </h2>
-              <span className="tnum text-[12.5px] text-[#9AA0A8]">
+              <span className="tnum text-[12.5px] text-[#98A2B3]">
                 {pipeline.products} in UAE · Activities
               </span>
             </div>
           </div>
 
-          <div className="bg-white border border-[#EBECEF] rounded-[13px] overflow-hidden">
-            <div className="grid grid-cols-[2.4fr_0.8fr_1fr_1.4fr_0.9fr] gap-3 px-5 py-[11px] bg-[#FAFBFC] border-b border-[#EBECEF] text-[11px] font-semibold tracking-[0.04em] uppercase text-[#9AA0A8]">
+          <div className="bg-white border border-[#E4E7EC]  overflow-hidden">
+            <div className="grid grid-cols-[2.4fr_0.8fr_1fr_1.4fr_0.9fr] gap-3 px-5 py-[11px] bg-[#F9FAFB] border-b border-[#E4E7EC] text-[11px] font-semibold tracking-[0.04em] uppercase text-[#98A2B3]">
               <span>Product</span>
               <span className="text-center">Options</span>
               <span className="text-center">Sellers</span>
@@ -107,9 +107,9 @@ function KPIRow({
         value={`${leadersPct}%`}
         sub={`${leaders} of ${stats.length} products`}
         icon={<Trophy className="w-[15px] h-[15px]" />}
-        iconBg="bg-[#FFF7ED]"
+        iconBg="bg-[#FFF4ED]"
         iconColor="text-[#C2410C]"
-        valueTone="text-[#16181D]"
+        valueTone="text-[#101828]"
       />
       <KPICard
         label="Need review"
@@ -124,7 +124,7 @@ function KPIRow({
         value={pipeline.competitors}
         sub={`${pipeline.scraped_listings} PDPs scraped`}
         icon={<Store className="w-[15px] h-[15px]" />}
-        iconBg="bg-[#FFF7ED]"
+        iconBg="bg-[#FFF4ED]"
         iconColor="text-[#EA580C]"
       />
     </div>
@@ -138,7 +138,7 @@ function KPICard({
   icon,
   iconBg,
   iconColor,
-  valueTone = "text-[#16181D]",
+  valueTone = "text-[#101828]",
 }: {
   label: string;
   value: string | number;
@@ -149,10 +149,10 @@ function KPICard({
   valueTone?: string;
 }) {
   return (
-    <div className="bg-white border border-[#EBECEF] rounded-[13px] px-[18px] py-4">
+    <div className="bg-white border border-[#E4E7EC]  px-[18px] py-4">
       <div className="flex items-center gap-2 mb-[13px]">
         <span
-          className={`w-[26px] h-[26px] rounded-[7px] inline-flex items-center justify-center ${iconBg} ${iconColor}`}
+          className={`w-[26px] h-[26px]  inline-flex items-center justify-center ${iconBg} ${iconColor}`}
         >
           {icon}
         </span>
@@ -163,7 +163,7 @@ function KPICard({
       >
         {value}
       </div>
-      <div className="text-[11.5px] text-[#9AA0A8] mt-1">{sub}</div>
+      <div className="text-[11.5px] text-[#98A2B3] mt-1">{sub}</div>
     </div>
   );
 }
@@ -183,7 +183,7 @@ function ProductRow({ stat }: { stat: DashboardStat }) {
       position = {
         label: `Cheapest · ${fmtPercent(Math.abs(pct))} under`,
         color: "#C2410C",
-        bg: "#FFF7ED",
+        bg: "#FFF4ED",
         border: "#FDBA74",
       };
     } else if (pct < -1) {
@@ -206,30 +206,30 @@ function ProductRow({ stat }: { stat: DashboardStat }) {
   return (
     <Link
       href={`/comparison/product/${product.id}`}
-      className="grid grid-cols-[2.4fr_0.8fr_1fr_1.4fr_0.9fr] gap-3 items-center px-5 py-[14px] border-b border-[#F1F2F4] last:border-b-0 hover:bg-[#FAFBFC] transition-colors"
+      className="grid grid-cols-[2.4fr_0.8fr_1fr_1.4fr_0.9fr] gap-3 items-center px-5 py-[14px] border-b border-[#F2F4F7] last:border-b-0 hover:bg-[#F9FAFB] transition-colors"
     >
       <div className="flex items-center gap-[11px] min-w-0">
-        <span className="w-[34px] h-[34px] shrink-0 rounded-[9px] bg-[#FFF7ED] border border-[#3D424B] grid place-items-center text-[16px]">
+        <span className="w-[34px] h-[34px] shrink-0  bg-[#FFF4ED] border border-[#3D424B] grid place-items-center text-[16px]">
           {emojiFor(product.name)}
         </span>
         <div className="min-w-0">
-          <div className="text-[13.5px] font-semibold text-[#1F2127] truncate">
+          <div className="text-[13.5px] font-semibold text-[#101828] truncate">
             {product.name}
           </div>
-          <div className="text-[11.5px] text-[#9AA0A8]">
+          <div className="text-[11.5px] text-[#98A2B3]">
             Activities · {product.city}
           </div>
         </div>
       </div>
-      <span className="tnum text-center text-[13px] font-medium text-[#5C6069]">
+      <span className="tnum text-center text-[13px] font-medium text-[#475467]">
         {option_count}
       </span>
-      <span className="tnum text-center text-[13px] font-medium text-[#5C6069]">
+      <span className="tnum text-center text-[13px] font-medium text-[#475467]">
         {seller_count}
       </span>
       <div>
         <span
-          className="inline-flex items-center gap-1.5 px-2.5 py-[3px] rounded-[7px] text-[11.5px] font-semibold border"
+          className="inline-flex items-center gap-1.5 px-2.5 py-[3px]  text-[11.5px] font-semibold border"
           style={{
             background: position.bg,
             color: position.color,
@@ -243,7 +243,7 @@ function ProductRow({ stat }: { stat: DashboardStat }) {
           {position.label}
         </span>
       </div>
-      <span className="tnum text-right text-[11.5px] text-[#9AA0A8]">
+      <span className="tnum text-right text-[11.5px] text-[#98A2B3]">
         {cheapest_competitor
           ? `${fmtAED(cheapest_competitor.price, cheapest_competitor.currency)} on ${cheapest_competitor.domain}`
           : "—"}

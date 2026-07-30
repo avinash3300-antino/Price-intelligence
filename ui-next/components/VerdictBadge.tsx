@@ -3,7 +3,7 @@ import { Check, X, Equal } from "lucide-react";
 const STYLES = {
   identical: {
     label: "identical",
-    bg: "#FFF7ED",
+    bg: "#FFF4ED",
     text: "#047857",
     border: "#A7F3D0",
     icon: Check,
@@ -36,7 +36,7 @@ export function VerdictBadge({
   const low = confidence < 0.7;
   return (
     <span
-      className="inline-flex items-center gap-1.5 px-2.5 py-[3px] rounded-[7px] text-[11.5px] font-semibold border"
+      className="inline-flex items-center gap-1.5 px-2.5 py-[3px]  text-[11.5px] font-semibold border"
       style={{ background: s.bg, color: s.text, borderColor: s.border }}
     >
       <Icon className="w-3 h-3" strokeWidth={3} />

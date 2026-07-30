@@ -13,7 +13,7 @@ export function PriceGap({
   compCurrency: string | null;
 }) {
   if (raynaPrice == null || compPrice == null) {
-    return <span className="text-[11px] text-[#9AA0A8]">price not stated</span>;
+    return <span className="text-[11px] text-[#98A2B3]">price not stated</span>;
   }
 
   // Always normalise both sides to AED before computing % gap, so a USD
@@ -37,7 +37,7 @@ export function PriceGap({
     signLabel = "match";
   } else if (we_cheaper) {
     color = "#C2410C";
-    bg = "#FFF7ED";
+    bg = "#FFF4ED";
     Arrow = ArrowUp;
     signLabel = "we win";
   } else {
@@ -52,22 +52,22 @@ export function PriceGap({
 
   return (
     <div className="flex items-baseline gap-3 text-[13px] flex-wrap">
-      <span className="text-[#3D424B]">
-        <span className="text-[10.5px] text-[#9AA0A8]">Rayna</span>{" "}
+      <span className="text-[#344054]">
+        <span className="text-[10.5px] text-[#98A2B3]">Rayna</span>{" "}
         <span className="tnum font-semibold">{fmtMoney(raynaAED, "AED")}</span>
       </span>
       <span className="text-[#D5D7DC]">·</span>
-      <span className="text-[#3D424B]">
-        <span className="text-[10.5px] text-[#9AA0A8]">Comp</span>{" "}
+      <span className="text-[#344054]">
+        <span className="text-[10.5px] text-[#98A2B3]">Comp</span>{" "}
         <span className="tnum font-semibold">{fmtMoney(compAED, "AED")}</span>
         {compForeign && (
-          <span className="ml-1.5 text-[10.5px] text-[#9AA0A8] tnum">
+          <span className="ml-1.5 text-[10.5px] text-[#98A2B3] tnum">
             ({fmtMoney(compPrice, compCurrency)})
           </span>
         )}
       </span>
       <span
-        className="inline-flex items-center gap-1 font-semibold px-2 py-0.5 rounded-[6px] text-[11.5px]"
+        className="inline-flex items-center gap-1 font-semibold px-2 py-0.5  text-[11.5px]"
         style={{ color, background: bg }}
       >
         <Arrow className="w-3 h-3" strokeWidth={3} />

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 100" role="img" aria-label="Rayna Tours">
+  <title>Rayna Tours</title>
+  <!-- Flag mark: four curved banners, brand colors L→R -->
+  <g transform="translate(4 8)">
+    <!-- Blue banner -->
+    <path d="M6 4 C 6 22, 2 44, 8 70 L 20 66 C 16 44, 20 22, 20 6 Z"
+          fill="#2EB5E0"/>
+    <!-- Yellow banner (behind) -->
+    <path d="M22 2 C 22 22, 18 46, 26 74 L 40 70 C 34 46, 38 24, 38 4 Z"
+          fill="#FCC628"/>
+    <!-- Orange banner -->
+    <path d="M40 4 C 40 24, 36 48, 44 76 L 58 72 C 52 48, 56 26, 56 6 Z"
+          fill="#F37B21"/>
+    <!-- Red banner (front) -->
+    <path d="M58 2 C 58 22, 54 46, 62 74 L 76 70 C 70 46, 74 24, 74 4 Z"
+          fill="#EC3013"/>
+  </g>
+  <!-- RAYNA wordmark -->
+  <text x="94" y="60"
+        font-family="Archivo, system-ui, sans-serif"
+        font-weight="900"
+        font-size="46"
+        letter-spacing="-1"
+        fill="#111111">RAYNA<tspan font-size="18" dy="-24" dx="2" fill="#111111">®</tspan></text>
+  <!-- TOURS tag -->
+  <g transform="translate(258 32)">
+    <rect width="72" height="26" fill="#F37B21"/>
+    <text x="36" y="19"
+          text-anchor="middle"
+          font-family="Archivo, system-ui, sans-serif"
+          font-weight="800"
+          font-size="15"
+          letter-spacing="1.5"
+          fill="#FFFFFF">TOURS</text>
+  </g>
+</svg>

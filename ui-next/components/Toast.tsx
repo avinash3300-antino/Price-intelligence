@@ -80,10 +80,10 @@ function ToastCard({
   const Icon = isSuccess ? CheckCircle2 : XCircle;
   const styles = isSuccess
     ? {
-        bg: "bg-[#FFF7ED]",
-        border: "border-[#FDBA74]",
+        bg: "bg-[#FFF4ED]",
+        border: "border-[#FED7AA]",
         icon: "text-[#C2410C]",
-        text: "text-[#7C2D12]",
+        text: "text-[#9A3412]",
       }
     : {
         bg: "bg-[#FBEAE8]",
@@ -95,7 +95,7 @@ function ToastCard({
   return (
     <div
       role={isSuccess ? "status" : "alert"}
-      className={`pointer-events-auto flex items-start gap-2.5 rounded-[10px] border shadow-[0_6px_20px_rgba(20,25,35,0.12)] pl-3 pr-2 py-2.5 min-w-[260px] max-w-[420px] ${styles.bg} ${styles.border} ${styles.text} transition-all duration-200 ${visible ? "opacity-100 translate-x-0" : "opacity-0 translate-x-3"}`}
+      className={`pointer-events-auto flex items-start gap-2.5  border shadow-[0_6px_20px_rgba(20,25,35,0.12)] pl-3 pr-2 py-2.5 min-w-[260px] max-w-[420px] ${styles.bg} ${styles.border} ${styles.text} transition-all duration-200 ${visible ? "opacity-100 translate-x-0" : "opacity-0 translate-x-3"}`}
     >
       <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${styles.icon}`} strokeWidth={2.5} />
       <div className="text-[13px] leading-snug font-medium flex-1">

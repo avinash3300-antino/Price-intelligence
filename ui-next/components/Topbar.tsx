@@ -1,16 +1,44 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 
-interface Props {
-  title: string;
+interface NavItem {
+  href: string;
+  label: string;
+  matcher: (path: string) => boolean;
+  comingSoon?: boolean;
+}
+
+const NAV: NavItem[] = [
+  { href: "/", label: "Mapping", matcher: (p) => p === "/" },
+  { href: "/mapped", label: "Mapped", matcher: (p) => p === "/mapped" },
+  {
+    href: "/comparison",
+    label: "Comparison",
+    matcher: (p) => p === "/comparison" || p.startsWith("/comparison/"),
+    comingSoon: true,
+  },
+  {
+    href: "/review",
+    label: "Review",
+    matcher: (p) => p === "/review",
+    comingSoon: true,
+  },
+];
+
+// Kept in the Props type for source compatibility with existing callers
+// (`AppLayout` still forwards title/subtitle) — but no longer rendered.
+export interface TopbarProps {
+  title?: string;
   subtitle?: string;
 }
 
-export function Topbar({ title, subtitle }: Props) {
+export function Topbar(_: TopbarProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [spinning, setSpinning] = useState(false);
 
   function handleRefresh() {
@@ -21,23 +49,67 @@ export function Topbar({ title, subtitle }: Props) {
   }
 
   return (
-    <header className="h-[60px] shrink-0 bg-white border-b border-[#EBECEF] flex items-center px-7 gap-[18px]">
-      <div className="leading-[1.25] min-w-0">
-        <div className="text-[15px] font-semibold -tracking-[0.01em] truncate">
-          {title}
-        </div>
-        {subtitle && (
-          <div className="text-[11.5px] text-[#8A8F98] font-normal truncate">
-            {subtitle}
-          </div>
-        )}
-      </div>
+    <header className="h-[60px] shrink-0 bg-white border-b-2 border-[#E4E7EC] flex items-center px-7 gap-[22px]">
+      <Link
+        href="/"
+        className="shrink-0 flex items-center"
+        title="Rayna Tours — Price Intelligence"
+      >
+        <img
+          src="/rayna-logo.svg"
+          alt="Rayna Tours"
+          className="h-[34px] w-auto"
+        />
+      </Link>
+
+      <nav className="flex items-center h-full">
+        {NAV.map((item) => {
+          const active = item.matcher(pathname);
+          const base =
+            "inline-flex items-center gap-2 px-[14px] h-full text-[13.5px] transition-colors relative";
+          if (item.comingSoon) {
+            return (
+              <div
+                key={item.href}
+                title="Coming soon"
+                role="link"
+                aria-disabled="true"
+                className={`${base} font-medium text-[#98A2B3] cursor-not-allowed select-none`}
+              >
+                {item.label}
+                <span className="text-[9.5px] font-semibold uppercase tracking-[0.06em] bg-[#F2F4F7] text-[#667085] border border-[#E4E7EC] px-[6px] py-[1px]">
+                  Soon
+                </span>
+              </div>
+            );
+          }
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`${base} ${
+                active
+                  ? "font-semibold text-[#101828]"
+                  : "font-medium text-[#475467] hover:text-[#101828]"
+              }`}
+            >
+              {item.label}
+              {active && (
+                <span
+                  aria-hidden
+                  className="absolute left-0 right-0 bottom-0 h-[2px] bg-[#EA580C]"
+                />
+              )}
+            </Link>
+          );
+        })}
+      </nav>
 
       <div className="ml-auto flex items-center gap-[14px]">
-        <div className="flex items-center bg-[#F2F3F5] border border-[#E7E8EB] rounded-[9px] p-[3px] gap-0.5">
+        <div className="flex items-center bg-[#F2F4F7] border border-[#E4E7EC] p-[3px] gap-0.5">
           <button
             type="button"
-            className="flex items-center gap-[7px] px-[11px] py-[5px] rounded-[7px] text-[12.5px] font-semibold bg-white text-[#EA580C] shadow-sm transition-colors"
+            className="flex items-center gap-[7px] px-[11px] py-[5px] text-[12.5px] font-semibold bg-white text-[#EA580C] shadow-sm transition-colors"
           >
             <span className="text-[13px]">🇦🇪</span>
             UAE · AED
@@ -45,33 +117,29 @@ export function Topbar({ title, subtitle }: Props) {
           <button
             type="button"
             disabled
-            className="flex items-center gap-[7px] px-[11px] py-[5px] rounded-[7px] text-[12.5px] font-medium bg-transparent text-[#B6BAC1] cursor-not-allowed"
+            className="flex items-center gap-[7px] px-[11px] py-[5px] text-[12.5px] font-medium bg-transparent text-[#98A2B3] cursor-not-allowed"
           >
             <span className="text-[13px] grayscale opacity-70">🇮🇳</span>
             India · INR
-            <span className="text-[9.5px] font-semibold bg-[#EDEEF1] text-[#9AA0A8] px-[6px] py-px rounded-[5px] tracking-[0.03em]">
+            <span className="text-[9.5px] font-semibold bg-[#F2F4F7] text-[#667085] px-[6px] py-px tracking-[0.03em]">
               SOON
             </span>
           </button>
         </div>
 
-        <div className="w-px h-[26px] bg-[#EBECEF]" />
+        <button
+          type="button"
+          onClick={handleRefresh}
+          title="Refresh"
+          className="w-[34px] h-[34px] border border-[#E4E7EC] bg-white flex items-center justify-center text-[#475467] hover:bg-[#F2F4F7] transition-colors"
+        >
+          <RefreshCw
+            className={`w-4 h-4 ${spinning ? "animate-spin" : ""}`}
+            strokeWidth={2}
+          />
+        </button>
 
-        <div className="flex items-center gap-[9px]">
-          <button
-            type="button"
-            onClick={handleRefresh}
-            title="Refresh"
-            className="w-[34px] h-[34px] rounded-[9px] border border-[#E2E3E7] bg-white flex items-center justify-center text-[#5C6069] hover:bg-[#F4F5F7] hover:border-[#D5D7DC] transition-colors"
-          >
-            <RefreshCw
-              className={`w-4 h-4 ${spinning ? "animate-spin" : ""}`}
-              strokeWidth={2}
-            />
-          </button>
-        </div>
-
-        <div className="w-[32px] h-[32px] rounded-full bg-gradient-to-br from-[#F59E0B] to-[#EA580C] text-white flex items-center justify-center text-[12.5px] font-semibold">
+        <div className="w-[32px] h-[32px] rounded-full bg-gradient-to-br from-[#F97316] to-[#EA580C] text-white flex items-center justify-center text-[12.5px] font-semibold">
           AK
         </div>
       </div>

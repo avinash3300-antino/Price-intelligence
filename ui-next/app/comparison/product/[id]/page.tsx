@@ -33,23 +33,23 @@ export default async function ProductPage(props: {
       subtitle="Option-level comparison against the market"
     >
       <div className="max-w-[1280px] mx-auto px-8 py-6">
-        <div className="flex items-center gap-1.5 text-[12.5px] text-[#9AA0A8] mb-4">
-          <Link href="/comparison" className="hover:text-[#3D424B]">
+        <div className="flex items-center gap-1.5 text-[12.5px] text-[#98A2B3] mb-4">
+          <Link href="/comparison" className="hover:text-[#344054]">
             Portfolio
           </Link>
           <span>/</span>
-          <span className="text-[#3D424B] font-medium">{product.name}</span>
+          <span className="text-[#344054] font-medium">{product.name}</span>
         </div>
 
         <div className="flex items-start gap-3.5 mb-6">
-          <div className="w-[52px] h-[52px] rounded-[13px] bg-[#FFF7ED] border border-[#3D424B] flex items-center justify-center text-2xl">
+          <div className="w-[52px] h-[52px]  bg-[#FFF4ED] border border-[#3D424B] flex items-center justify-center text-2xl">
             🌆
           </div>
           <div className="flex-1">
             <h1 className="text-[22px] font-semibold tracking-[-0.02em] mb-1">
               {product.name}
             </h1>
-            <div className="flex items-center gap-3.5 text-[12.5px] text-[#8A8F98]">
+            <div className="flex items-center gap-3.5 text-[12.5px] text-[#667085]">
               <span className="inline-flex items-center gap-1">
                 <MapPin className="w-3.5 h-3.5" />
                 {product.city}, {product.country}
@@ -58,13 +58,13 @@ export default async function ProductPage(props: {
               <span>{options.length} bookable options</span>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 text-[12px] text-[#9AA0A8] bg-[#F2F3F5] border border-[#E7E8EB] rounded-[8px] px-[11px] py-1.5">
+          <div className="flex items-center gap-1.5 text-[12px] text-[#98A2B3] bg-[#F2F4F7] border border-[#E7E8EB]  px-[11px] py-1.5">
             <span>🇦🇪</span> {product.currency} · {product.market}
           </div>
         </div>
 
         {options.length === 0 ? (
-          <div className="bg-white border border-dashed border-[#D5D7DC] rounded-[14px] px-8 py-16 text-center text-[#8A8F98] text-[13px]">
+          <div className="bg-white border border-dashed border-[#D5D7DC]  px-8 py-16 text-center text-[#667085] text-[13px]">
             No Rayna options extracted for this product.
           </div>
         ) : (
@@ -141,11 +141,11 @@ function OptionSection({ bundle }: { bundle: RaynaOptionWithMappings }) {
     <section>
       <div className="mb-3 flex items-baseline justify-between gap-4">
         <div>
-          <h2 className="text-[16px] font-semibold text-[#1F2127] -tracking-[0.01em]">
+          <h2 className="text-[16px] font-semibold text-[#101828] -tracking-[0.01em]">
             {option.name}
           </h2>
-          <div className="text-[12.5px] text-[#8A8F98] mt-1">
-            <span className="tnum font-semibold text-[#3D424B]">
+          <div className="text-[12.5px] text-[#667085] mt-1">
+            <span className="tnum font-semibold text-[#344054]">
               {fmtMoney(option.price, option.currency)}
             </span>
             <span className="mx-2 text-[#D5D7DC]">·</span>
@@ -169,7 +169,7 @@ function OptionSection({ bundle }: { bundle: RaynaOptionWithMappings }) {
       {headline && <div className="mb-4">{headline}</div>}
 
       {ncomp === 0 && ndiff === 0 && (
-        <div className="bg-white border border-dashed border-[#D5D7DC] rounded-[12px] px-6 py-8 text-center text-[12.5px] text-[#8A8F98]">
+        <div className="bg-white border border-dashed border-[#D5D7DC]  px-6 py-8 text-center text-[12.5px] text-[#667085]">
           No competitor mappings yet.
         </div>
       )}
@@ -216,7 +216,7 @@ function Headline({
   detail: string;
 }) {
   const styles = {
-    good: { bg: "#FFF7ED", border: "#FDBA74", text: "#C2410C", sub: "#2F6E68" },
+    good: { bg: "#FFF4ED", border: "#FDBA74", text: "#C2410C", sub: "#2F6E68" },
     bad: { bg: "#FBEAE8", border: "#F1C7C2", text: "#B5342C", sub: "#9A4138" },
     warn: { bg: "#FBF1DE", border: "#EFD8A6", text: "#9A6510", sub: "#A07A33" },
     neutral: { bg: "#FAFBFC", border: "#EBECEF", text: "#3D424B", sub: "#5C6069" },
@@ -224,7 +224,7 @@ function Headline({
   const s = styles[tone];
   return (
     <div
-      className="rounded-[12px] border px-[18px] py-[14px]"
+      className=" border px-[18px] py-[14px]"
       style={{ background: s.bg, borderColor: s.border }}
     >
       <div className="text-[13.5px] font-semibold" style={{ color: s.text }}>

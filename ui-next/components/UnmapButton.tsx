@@ -35,7 +35,7 @@ export function UnmapButton({ mappingId }: { mappingId: number }) {
       type="button"
       disabled={busy}
       onClick={unmap}
-      className="inline-flex items-center gap-1 px-2 py-1 rounded-[6px] text-[11px] font-semibold text-[#9AA0A8] hover:bg-[#FBEAE8] hover:text-[#B5342C] disabled:opacity-50 transition-colors"
+      className="inline-flex items-center gap-1 px-2 py-1  text-[11px] font-semibold text-[#98A2B3] hover:bg-[#FBEAE8] hover:text-[#B5342C] disabled:opacity-50 transition-colors"
       title="Unmap"
     >
       {busy ? (
