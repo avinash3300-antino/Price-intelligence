@@ -148,16 +148,89 @@ def _fetch_with_curl_cffi(url: str) -> tuple[int, str] | None:
     return int(r.status_code), r.text
 
 
+PLAYWRIGHT_TIMEOUT_MS = 45000  # 45s covers Cloudflare's slower JS challenges
+
+
+def _fetch_with_playwright(url: str) -> tuple[int, str] | None:
+    """Third fallback: real headless Chromium via Playwright. Solves
+    Cloudflare's JS challenge that TLS-only spoofing (curl-cffi) can't beat.
+    Used for Viator, GetYourGuide, Klook and other JS-gated OTAs.
+
+    Cost: ~5-10s per fetch (browser startup + page render). Requires
+    `pip install playwright && playwright install chromium`. Returns None
+    if either the library or the browser binary isn't available — the
+    caller then surfaces FetchBlockedError so the UI shows the paste-text
+    textarea fallback."""
+    try:
+        from playwright.sync_api import sync_playwright  # type: ignore
+    except ImportError:
+        return None
+
+    try:
+        with sync_playwright() as p:
+            # A recent stable channel isn't guaranteed on every host; fall
+            # back to the bundled chromium build shipped with Playwright.
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-features=IsolateOrigins,site-per-process",
+                    "--no-sandbox",  # required in most container envs
+                ],
+            )
+            try:
+                context = browser.new_context(
+                    user_agent=USER_AGENT,
+                    locale="en-US",
+                    viewport={"width": 1440, "height": 900},
+                    java_script_enabled=True,
+                    # Cloudflare-tier bot managers also fingerprint via nav
+                    # webdriver / plugins / permissions. This CDP script
+                    # patch nulls out the most obvious tell.
+                )
+                context.add_init_script(
+                    "Object.defineProperty(navigator, 'webdriver', { get: () => undefined });"
+                )
+                page = context.new_page()
+                # Wait for network to go idle so Cloudflare's redirect +
+                # cookie-planting round-trips complete before we read HTML.
+                page.goto(
+                    url,
+                    wait_until="networkidle",
+                    timeout=PLAYWRIGHT_TIMEOUT_MS,
+                )
+                # An extra small delay lets late-fetched JS content render
+                # into the DOM before we snapshot.
+                page.wait_for_timeout(1500)
+                html = page.content()
+                status_hint = 200  # Playwright doesn't surface HTTP status
+                # cleanly on final navigation; treat a rendered DOM as OK
+                # and let the downstream length check catch empties.
+                return status_hint, html
+            finally:
+                browser.close()
+    except Exception as e:  # noqa: BLE001
+        # Any Playwright-side failure (browser not installed, launch failure,
+        # navigation timeout) collapses to None so the outer chain raises
+        # FetchBlockedError and the UI shows the paste-text fallback.
+        print(f"[add_by_url] playwright fallback failed for {url}: {type(e).__name__}: {e}")
+        return None
+
+
 def fetch_url_as_text(url: str) -> tuple[str, str | None]:
-    """Return (plain_text, title). Raises FetchBlockedError if we couldn't
-    get real content — the caller should ask the user to paste page text
+    """Return (plain_text, title). Raises FetchBlockedError if all fetch
+    strategies fail — the caller then asks the user to paste page text
     manually instead.
 
-    Strategy: try plain httpx first (fast, cheap). If that gets blocked
-    (4xx/5xx or too-thin body), retry via curl-cffi with a Chrome TLS
-    fingerprint — this bypasses Cloudflare on many OTAs (Viator, etc.)
-    where vanilla httpx is instantly flagged.
+    Strategy (three stages, escalating cost, first-that-works wins):
+      1. httpx with Chrome-ish headers        — ~200ms, works for open sites
+      2. curl-cffi with Chrome TLS impersonation — ~500ms, beats TLS fingerprinting
+      3. Playwright headless Chromium         — ~5-10s, beats Cloudflare JS challenge
     """
+
+    def _is_thin_body(html_body: str) -> bool:
+        return len(html_to_text(html_body)[0]) < MIN_CONTENT_CHARS
+
     status: int = 0
     body: str = ""
     fetch_err: Exception | None = None
@@ -169,15 +242,27 @@ def fetch_url_as_text(url: str) -> tuple[str, str | None]:
         fetch_err = e
 
     needs_fallback = (
-        fetch_err is not None
-        or status >= 400
-        or len(html_to_text(body)[0]) < MIN_CONTENT_CHARS
+        fetch_err is not None or status >= 400 or _is_thin_body(body)
     )
 
     # Stage 2: curl-cffi (Chrome-impersonated TLS)
     if needs_fallback:
         try:
             fallback = _fetch_with_curl_cffi(url)
+        except Exception as e:  # noqa: BLE001
+            fallback = None
+            fetch_err = e
+        if fallback is not None:
+            status, body = fallback
+            fetch_err = None
+        needs_fallback = (
+            fetch_err is not None or status >= 400 or _is_thin_body(body)
+        )
+
+    # Stage 3: Playwright headless Chromium — solves Cloudflare JS challenges
+    if needs_fallback:
+        try:
+            fallback = _fetch_with_playwright(url)
         except Exception as e:  # noqa: BLE001
             fallback = None
             fetch_err = e

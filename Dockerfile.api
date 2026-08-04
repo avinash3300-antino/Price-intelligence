@@ -2,16 +2,43 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# build-essential + libcurl for curl-cffi wheels that occasionally rebuild on slim images
+# System deps:
+#   build-essential + libcurl → curl-cffi wheels sometimes rebuild on slim
+#   the rest → Chromium runtime libs Playwright needs. Without them the
+#   browser starts but silently fails on most pages.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         libcurl4-openssl-dev \
         curl \
+        libnss3 \
+        libnspr4 \
+        libatk1.0-0 \
+        libatk-bridge2.0-0 \
+        libcups2 \
+        libdrm2 \
+        libdbus-1-3 \
+        libatspi2.0-0 \
+        libx11-6 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxext6 \
+        libxfixes3 \
+        libxrandr2 \
+        libgbm1 \
+        libxcb1 \
+        libxkbcommon0 \
+        libpango-1.0-0 \
+        libcairo2 \
+        libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps first so this layer caches across code changes
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Download the Chromium binary that Playwright drives. OS-level libs are
+# installed above so we skip --with-deps to keep the image smaller.
+RUN playwright install chromium
 
 # App code — src/ is imported by backend.main.create_mapping_from_url
 COPY backend/ ./backend/
