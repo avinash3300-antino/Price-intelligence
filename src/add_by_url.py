@@ -148,19 +148,54 @@ def _fetch_with_curl_cffi(url: str) -> tuple[int, str] | None:
     return int(r.status_code), r.text
 
 
-PLAYWRIGHT_TIMEOUT_MS = 45000  # 45s covers Cloudflare's slower JS challenges
+PLAYWRIGHT_TIMEOUT_MS = 60000  # 60s covers Cloudflare's slower challenges
+
+
+# Bundle of stealth patches that null out the tells Cloudflare/DataDome/
+# PerimeterX probe. Applied once before every page navigation. This is a
+# hand-rolled subset of the popular playwright-stealth patches — enough
+# to pass Viator / GetYourGuide's default bot-management level.
+_STEALTH_INIT_SCRIPT = r"""
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+if (!window.chrome) {
+    window.chrome = { runtime: {}, loadTimes: () => ({}), csi: () => ({}) };
+}
+Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+Object.defineProperty(navigator, 'plugins', {
+    get: () => [
+        { name: 'PDF Viewer', filename: 'internal-pdf-viewer' },
+        { name: 'Chrome PDF Viewer', filename: 'internal-pdf-viewer' },
+        { name: 'Chromium PDF Viewer', filename: 'internal-pdf-viewer' },
+    ],
+});
+const origQuery = window.navigator.permissions && window.navigator.permissions.query;
+if (origQuery) {
+    window.navigator.permissions.query = (parameters) =>
+        parameters.name === 'notifications'
+            ? Promise.resolve({ state: Notification.permission })
+            : origQuery(parameters);
+}
+Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+"""
 
 
 def _fetch_with_playwright(url: str) -> tuple[int, str] | None:
-    """Third fallback: real headless Chromium via Playwright. Solves
-    Cloudflare's JS challenge that TLS-only spoofing (curl-cffi) can't beat.
-    Used for Viator, GetYourGuide, Klook and other JS-gated OTAs.
+    """Third fallback: real headless Chromium via Playwright, with stealth
+    patches to defeat Cloudflare's JS challenge. Used for Viator,
+    GetYourGuide, Klook and other JS-gated OTAs.
 
-    Cost: ~5-10s per fetch (browser startup + page render). Requires
-    `pip install playwright && playwright install chromium`. Returns None
-    if either the library or the browser binary isn't available — the
-    caller then surfaces FetchBlockedError so the UI shows the paste-text
-    textarea fallback."""
+    Cost: ~5-15s per fetch (browser startup + Cloudflare challenge solve).
+    Requires `pip install playwright && playwright install chromium`.
+    Returns None if the library or the browser binary isn't available —
+    the caller then surfaces FetchBlockedError so the UI shows the
+    paste-text textarea fallback.
+
+    Wait strategy: navigate, wait for `domcontentloaded`, then poll for
+    real content (body text length > 500 chars). Cloudflare's challenge
+    page has almost no visible text, so this filters challenge pages out
+    without needing to detect the specific challenge markup.
+    """
     try:
         from playwright.sync_api import sync_playwright  # type: ignore
     except ImportError:
@@ -168,45 +203,74 @@ def _fetch_with_playwright(url: str) -> tuple[int, str] | None:
 
     try:
         with sync_playwright() as p:
-            # A recent stable channel isn't guaranteed on every host; fall
-            # back to the bundled chromium build shipped with Playwright.
             browser = p.chromium.launch(
                 headless=True,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--disable-features=IsolateOrigins,site-per-process",
-                    "--no-sandbox",  # required in most container envs
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
                 ],
             )
             try:
                 context = browser.new_context(
                     user_agent=USER_AGENT,
                     locale="en-US",
+                    timezone_id="Asia/Dubai",
                     viewport={"width": 1440, "height": 900},
                     java_script_enabled=True,
-                    # Cloudflare-tier bot managers also fingerprint via nav
-                    # webdriver / plugins / permissions. This CDP script
-                    # patch nulls out the most obvious tell.
+                    extra_http_headers={
+                        "Accept-Language": "en-US,en;q=0.9",
+                        "Accept": (
+                            "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                            "image/avif,image/webp,image/apng,*/*;q=0.8"
+                        ),
+                        "Sec-Ch-Ua": '"Chromium";v="120", "Not:A-Brand";v="24"',
+                        "Sec-Ch-Ua-Mobile": "?0",
+                        "Sec-Ch-Ua-Platform": '"macOS"',
+                        "Upgrade-Insecure-Requests": "1",
+                    },
                 )
-                context.add_init_script(
-                    "Object.defineProperty(navigator, 'webdriver', { get: () => undefined });"
-                )
+                context.add_init_script(_STEALTH_INIT_SCRIPT)
                 page = context.new_page()
-                # Wait for network to go idle so Cloudflare's redirect +
-                # cookie-planting round-trips complete before we read HTML.
+
                 page.goto(
                     url,
-                    wait_until="networkidle",
+                    wait_until="domcontentloaded",
                     timeout=PLAYWRIGHT_TIMEOUT_MS,
                 )
-                # An extra small delay lets late-fetched JS content render
-                # into the DOM before we snapshot.
-                page.wait_for_timeout(1500)
+
+                # Poll for real content. Cloudflare challenge pages have
+                # tiny body text (< 500 chars); real product pages are
+                # thousands of chars. If we never cross the threshold
+                # within ~25s, give up and let the caller show the paste
+                # fallback rather than returning junk to Claude.
+                deadline_ms = 25000
+                interval_ms = 750
+                elapsed = 0
+                content_len = 0
+                while elapsed < deadline_ms:
+                    try:
+                        content_len = int(
+                            page.evaluate("() => document.body.innerText.length")
+                        )
+                    except Exception:  # noqa: BLE001
+                        content_len = 0
+                    if content_len >= MIN_CONTENT_CHARS:
+                        break
+                    page.wait_for_timeout(interval_ms)
+                    elapsed += interval_ms
+
+                # One more small settle so lazy-loaded price/description
+                # blocks land in the DOM before we snapshot.
+                page.wait_for_timeout(1200)
                 html = page.content()
-                status_hint = 200  # Playwright doesn't surface HTTP status
-                # cleanly on final navigation; treat a rendered DOM as OK
-                # and let the downstream length check catch empties.
-                return status_hint, html
+
+                # HTTP status hint — Playwright doesn't cleanly surface
+                # the final navigation status; treat any body with > 0
+                # chars as 200 and let the downstream length check reject
+                # anything that came back thin.
+                return 200, html
             finally:
                 browser.close()
     except Exception as e:  # noqa: BLE001
@@ -217,15 +281,83 @@ def _fetch_with_playwright(url: str) -> tuple[int, str] | None:
         return None
 
 
+FIRECRAWL_ENDPOINT = "https://api.firecrawl.dev/v1/scrape"
+FIRECRAWL_TIMEOUT_S = 90
+
+
+def _fetch_with_firecrawl(url: str) -> tuple[int, str] | None:
+    """Fourth fallback: Firecrawl API. Their infrastructure runs real
+    residential-fingerprinted browsers with maintained anti-bot patches,
+    so it clears Cloudflare on sites (Viator, GetYourGuide, Klook) where
+    our DIY Playwright still gets a 403.
+
+    Cost: ~1 API credit per URL (500/mo on the free tier at zero cost;
+    $19/mo for 3,000/mo above that). Latency ~3-10s. Reuses the existing
+    FIRECRAWL_KEY that the ingest pipeline (src/scrape_competitors.py)
+    already uses — no new secret to provision.
+
+    Returns None if the key isn't set or the call errors — the outer
+    chain then surfaces FetchBlockedError and the UI shows the
+    paste-text fallback."""
+    if not getattr(config, "FIRECRAWL_KEY", None):
+        return None
+    try:
+        r = httpx.post(
+            FIRECRAWL_ENDPOINT,
+            headers={
+                "Authorization": f"Bearer {config.FIRECRAWL_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "url": url,
+                "formats": ["markdown"],
+                "onlyMainContent": True,
+                # Modest wait so lazy-hydrated pieces (price, itinerary)
+                # land in the rendered DOM before Firecrawl serialises.
+                "waitFor": 3000,
+            },
+            timeout=FIRECRAWL_TIMEOUT_S,
+        )
+    except httpx.HTTPError as e:
+        print(f"[add_by_url] firecrawl transport error for {url}: {type(e).__name__}: {e}")
+        return None
+    if r.status_code >= 400:
+        print(f"[add_by_url] firecrawl HTTP {r.status_code} for {url}: {r.text[:200]}")
+        return None
+    try:
+        payload = r.json()
+    except ValueError:
+        print(f"[add_by_url] firecrawl non-JSON response for {url}: {r.text[:200]}")
+        return None
+    if not payload.get("success"):
+        print(f"[add_by_url] firecrawl success=false for {url}: {payload.get('error')}")
+        return None
+    data = payload.get("data") or {}
+    md = data.get("markdown") or ""
+    if len(md) < MIN_CONTENT_CHARS:
+        # Firecrawl returned success but with too-thin content — treat as
+        # a soft failure so the caller can surface the paste fallback.
+        print(f"[add_by_url] firecrawl returned only {len(md)} chars for {url}")
+        return None
+    # html_to_text() expects HTML; wrap the markdown in a <pre> so its
+    # parser preserves whitespace and treats it as one text block. The
+    # extractor Claude sees this as the page's readable content — same
+    # shape as the httpx/playwright paths.
+    wrapped = f"<html><head></head><body><pre>{md}</pre></body></html>"
+    return 200, wrapped
+
+
 def fetch_url_as_text(url: str) -> tuple[str, str | None]:
     """Return (plain_text, title). Raises FetchBlockedError if all fetch
     strategies fail — the caller then asks the user to paste page text
     manually instead.
 
-    Strategy (three stages, escalating cost, first-that-works wins):
-      1. httpx with Chrome-ish headers        — ~200ms, works for open sites
-      2. curl-cffi with Chrome TLS impersonation — ~500ms, beats TLS fingerprinting
-      3. Playwright headless Chromium         — ~5-10s, beats Cloudflare JS challenge
+    Strategy (four stages, escalating cost, first-that-works wins):
+      1. httpx with Chrome-ish headers          — ~200ms, works for open sites
+      2. curl-cffi with Chrome TLS impersonation  — ~500ms, beats TLS fingerprinting
+      3. Playwright headless Chromium + stealth  — ~5-15s, beats mid-tier Cloudflare
+      4. Firecrawl API                            — ~3-10s, beats enterprise Cloudflare
+                                                    (Viator, GetYourGuide, Klook)
     """
 
     def _is_thin_body(html_body: str) -> bool:
@@ -263,6 +395,20 @@ def fetch_url_as_text(url: str) -> tuple[str, str | None]:
     if needs_fallback:
         try:
             fallback = _fetch_with_playwright(url)
+        except Exception as e:  # noqa: BLE001
+            fallback = None
+            fetch_err = e
+        if fallback is not None:
+            status, body = fallback
+            fetch_err = None
+        needs_fallback = (
+            fetch_err is not None or status >= 400 or _is_thin_body(body)
+        )
+
+    # Stage 4: Firecrawl API — beats enterprise Cloudflare (Viator, GYG, Klook)
+    if needs_fallback:
+        try:
+            fallback = _fetch_with_firecrawl(url)
         except Exception as e:  # noqa: BLE001
             fallback = None
             fetch_err = e
