@@ -22,13 +22,11 @@ const NAV: NavItem[] = [
     href: "/comparison",
     label: "Comparison",
     matcher: (p) => p === "/comparison" || p.startsWith("/comparison/"),
-    comingSoon: true,
   },
   {
     href: "/review",
     label: "Review",
     matcher: (p) => p === "/review",
-    comingSoon: true,
   },
 ];
 

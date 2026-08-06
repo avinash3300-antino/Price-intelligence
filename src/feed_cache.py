@@ -176,7 +176,7 @@ def refresh_all(
     failures: list[dict[str, Any]] = []
     started = time.monotonic()
 
-    with httpx.Client(http2=False) as client:
+    with httpx.Client(http2=False, follow_redirects=True) as client:
         with ThreadPoolExecutor(max_workers=parallelism) as pool:
             futs = {
                 pool.submit(

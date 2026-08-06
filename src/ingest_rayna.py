@@ -22,7 +22,10 @@ REQUEST_TIMEOUT_S = 60
 
 
 def _fetch_live() -> dict[str, Any]:
-    r = httpx.get(API_URL, timeout=REQUEST_TIMEOUT_S)
+    # The Vercel endpoint now 302-redirects to a Blob storage URL for the
+    # cached-hourly snapshot. Follow redirects so daily cron actually gets
+    # fresh data instead of silently falling back to the disk cache.
+    r = httpx.get(API_URL, timeout=REQUEST_TIMEOUT_S, follow_redirects=True)
     r.raise_for_status()
     data = r.json()
     config.CATALOG_LIVE_PATH.write_text(json.dumps(data, ensure_ascii=False))

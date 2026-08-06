@@ -250,6 +250,13 @@ def sync() -> dict[str, Any]:
             drop = [i for i in stale if i not in ref]
             if drop:
                 placeholders = ",".join("?" * len(drop))
+                # price_observations also FK options.id — clear those first
+                # so the options DELETE doesn't fail the constraint. The rows
+                # are meaningless without the parent option anyway.
+                conn.execute(
+                    f"DELETE FROM price_observations WHERE option_id IN ({placeholders})",
+                    drop,
+                )
                 conn.execute(
                     f"DELETE FROM options WHERE id IN ({placeholders})",
                     drop,
