@@ -254,6 +254,19 @@ export function getMapped(date?: string | null): Promise<MappedItem[]> {
 
 export const API_BASE_PUBLIC = API_BASE;
 
+export interface ExtractedCompetitorOption {
+  competitor_option_id: number;
+  name: string;
+  price: number | null;
+  currency: string | null;
+  pricing_basis: string;
+  verdict: "identical" | "near" | "different" | null;
+  confidence: number | null;
+  diff_notes: string | null;
+  mapping_id: number | null;
+  is_target: boolean;
+}
+
 export interface AddByUrlResponse {
   mapping_id: number | null;
   rayna_option_id: number;
@@ -268,6 +281,7 @@ export interface AddByUrlResponse {
   competitor_price: number | null;
   competitor_currency: string | null;
   competitor_pricing_basis: string;
+  all_options: ExtractedCompetitorOption[];
 }
 
 export type AddByUrlOutcome =

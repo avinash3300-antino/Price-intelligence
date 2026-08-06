@@ -204,8 +204,28 @@ class AddByUrlRequest(BaseModel):
     note: Optional[str] = None
 
 
+class ExtractedCompetitorOption(BaseModel):
+    """One competitor option saved from a URL paste. Multiple of these may be
+    returned per URL (Klook/GYG pages often list several packages)."""
+    competitor_option_id: int
+    name: str
+    price: Optional[float] = None
+    currency: Optional[str] = None
+    pricing_basis: str
+    # If the caller's Rayna option was mapped to this competitor option, these
+    # fields carry the adjudicated verdict. Otherwise None.
+    verdict: Optional[str] = None
+    confidence: Optional[float] = None
+    diff_notes: Optional[str] = None
+    mapping_id: Optional[int] = None
+    is_target: bool = False  # True for the option that got mapped to the user's target
+
+
 class AddByUrlResponse(BaseModel):
-    mapping_id: Optional[int]  # None if verdict='different' and low confidence
+    # Legacy per-option fields describe the option that got mapped to the
+    # caller's target (backwards compat with the single-option UI). Set to
+    # None if no option was a good enough match to auto-map.
+    mapping_id: Optional[int]
     rayna_option_id: int
     competitor_option_id: int
     seller_domain: str
@@ -214,11 +234,14 @@ class AddByUrlResponse(BaseModel):
     confidence: float
     diff_notes: str
     saved_mapping: bool
-    # A minimal preview of what got extracted so the UI can render immediately.
     competitor_name: str
     competitor_price: Optional[float]
     competitor_currency: Optional[str]
     competitor_pricing_basis: str
+    # New: full list of every option extracted from the URL, in the order
+    # Claude returned them. The UI shows all of these so the reviewer can
+    # see the whole catalog on that page, not just the auto-mapped one.
+    all_options: list[ExtractedCompetitorOption] = []
 
 
 class MappedItem(BaseModel):
@@ -907,10 +930,14 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
             # as "show the paste-text textarea".
             raise HTTPException(status_code=422, detail=str(e)) from e
 
-    # 5. Claude extraction + adjudication (network + $)
+    # 5. Claude extraction — ALL bookable options on the page, not just one.
+    print(
+        f"[from-url] fetched {len(content)} chars from {req.url} "
+        f"(title={page_title!r}); first 400 chars: {content[:400]!r}"
+    )
     client = Anthropic(api_key=config.ANTHROPIC_API_KEY)
     try:
-        extracted = add_by_url.extract_competitor_option(
+        extracted_list = add_by_url.extract_competitor_options(
             client, content, req.url, page_title,
         )
     except Exception as e:  # noqa: BLE001
@@ -918,8 +945,17 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
             status_code=502,
             detail=f"Extraction failed: {type(e).__name__}: {e}",
         ) from e
+    if not extracted_list:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Extraction returned zero options. Either the URL is a "
+                "listing/category page (not a product page), or the page's "
+                "package picker didn't render. Try pasting the page text "
+                "into the fallback textarea."
+            ),
+        )
 
-    # Shape rayna_opt + competitor_opt like the adjudicator expects.
     rayna_opt_dict = {
         "name": rayna["name"],
         "price": rayna["price"],
@@ -927,44 +963,55 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
         "pricing_basis": rayna["pricing_basis"] or "unknown",
         "fingerprint_json": rayna["fingerprint_json"] or "{}",
     }
-    competitor_opt_dict = {
-        "name": extracted.name,
-        "price": extracted.price,
-        "currency": extracted.currency,
-        "pricing_basis": extracted.fingerprint.pricing_basis or "unknown",
-        "fingerprint_json": extracted.fingerprint.model_dump_json(),
-    }
     anchor_product = {
         "name": rayna["anchor_name"],
         "city": rayna["anchor_city"],
         "type": rayna["anchor_type"],
     }
 
-    try:
-        verdict, _usage, judge_model = add_by_url.adjudicate_pair(
-            client,
-            rayna_opt_dict,
-            competitor_opt_dict,
-            anchor_product,
-            seller_domain,
-        )
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(
-            status_code=502,
-            detail=f"Adjudication failed: {type(e).__name__}: {e}",
-        ) from e
+    # 6. Adjudicate EACH extracted option against the target Rayna option.
+    #    The best-match becomes the auto-mapped one. The others are still
+    #    saved so the reviewer can map them to *other* Rayna options later.
+    verdicts: list[Any] = []  # parallel to extracted_list
+    judge_model = "manual-url"
+    for opt in extracted_list:
+        comp_dict = {
+            "name": opt.name,
+            "price": opt.price,
+            "currency": opt.currency,
+            "pricing_basis": opt.fingerprint.pricing_basis or "unknown",
+            "fingerprint_json": opt.fingerprint.model_dump_json(),
+        }
+        try:
+            v, _usage, judge_model = add_by_url.adjudicate_pair(
+                client, rayna_opt_dict, comp_dict, anchor_product, seller_domain,
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f"[from-url] adjudication failed for opt={opt.name!r}: {e}")
+            v = None
+        verdicts.append(v)
 
-    # 6. Decide save-mapping vs save-competitor-only.
-    #    Rule: save the mapping if verdict is identical/near, OR if verdict is
-    #    'different' but confidence is low (< 0.6) — the model isn't sure, so
-    #    let the human decide.
-    should_save_mapping = verdict.verdict in ("identical", "near") or (
-        verdict.verdict == "different" and verdict.confidence < 0.6
+    # Pick the best index to auto-map: prefer 'identical' > 'near' > 'different',
+    # then by confidence. None (adjudicator crash) is treated as worst.
+    def _rank(v: Any) -> tuple[int, float]:
+        if v is None:
+            return (99, 0.0)
+        order = {"identical": 0, "near": 1, "different": 2}
+        return (order.get(v.verdict, 3), -float(v.confidence or 0))
+
+    best_idx = min(range(len(verdicts)), key=lambda i: _rank(verdicts[i])) if verdicts else -1
+    best_verdict = verdicts[best_idx] if best_idx >= 0 else None
+    should_save_mapping = best_verdict is not None and (
+        best_verdict.verdict in ("identical", "near")
+        or (best_verdict.verdict == "different" and best_verdict.confidence < 0.6)
     )
 
-    # 7. Persist competitors + listing + option + (optional) mapping.
+    # 7. Persist competitors + listing + one options row per extracted option +
+    #    one mapping (best_idx only).
     now = datetime.now(timezone.utc).isoformat()
     diff_prefix = f"[Manual URL paste] {req.note.strip()} — " if req.note else "[Manual URL paste] "
+
+    saved_options: list[dict[str, Any]] = []  # rows to emit back to the UI
 
     with conn() as c:
         # 7a. Upsert competitor row
@@ -998,69 +1045,88 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
                  raw_html, scraped_at, scrape_method)
                VALUES (?, ?, ?, ?, NULL, ?, 'manual_url')""",
             (
-                competitor_id, req.url, page_title or extracted.name,
-                content[:200000],  # cap at 200KB to be safe
+                competitor_id, req.url,
+                page_title or (extracted_list[0].name if extracted_list else ""),
+                content[:200000],
                 now,
             ),
         )
         listing_id = cur.lastrowid
 
-        # 7c. Insert options row
-        cur = c.execute(
-            """INSERT INTO options
-                (source, competitor_listing_id, name, pricing_basis,
-                 price, currency, market, fingerprint_json,
-                 raw_extracted_json, extraction_model, extracted_at)
-               VALUES ('competitor', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                listing_id,
-                extracted.name,
-                extracted.fingerprint.pricing_basis or "unknown",
-                extracted.price,
-                extracted.currency,
-                rayna["market"],
-                extracted.fingerprint.model_dump_json(),
-                extracted.model_dump_json(),
-                "manual-url",
-                now,
-            ),
-        )
-        competitor_option_id = cur.lastrowid
-
-        # 7d. Insert mapping if the verdict permits it
+        # 7c. Insert every extracted option, mapping the best one only
         mapping_id: Optional[int] = None
-        if should_save_mapping:
+        for i, opt in enumerate(extracted_list):
             cur = c.execute(
-                """INSERT INTO mappings
-                    (rayna_option_id, competitor_option_id, verdict, confidence,
-                     diff_notes, judge_model, human_reviewed, human_verdict,
-                     is_manual, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, 0, NULL, 1, ?)""",
+                """INSERT INTO options
+                    (source, competitor_listing_id, name, pricing_basis,
+                     price, currency, market, fingerprint_json,
+                     raw_extracted_json, extraction_model, extracted_at)
+                   VALUES ('competitor', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    req.rayna_option_id, competitor_option_id,
-                    verdict.verdict, verdict.confidence,
-                    diff_prefix + verdict.diff_notes, judge_model,
+                    listing_id,
+                    opt.name,
+                    opt.fingerprint.pricing_basis or "unknown",
+                    opt.price,
+                    opt.currency,
+                    rayna["market"],
+                    opt.fingerprint.model_dump_json(),
+                    opt.model_dump_json(),
+                    "manual-url",
                     now,
                 ),
             )
-            mapping_id = cur.lastrowid
+            opt_id = cur.lastrowid
+            v = verdicts[i]
+            is_target = i == best_idx
+
+            if is_target and should_save_mapping and v is not None:
+                cur = c.execute(
+                    """INSERT INTO mappings
+                        (rayna_option_id, competitor_option_id, verdict, confidence,
+                         diff_notes, judge_model, human_reviewed, human_verdict,
+                         is_manual, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, 0, NULL, 1, ?)""",
+                    (
+                        req.rayna_option_id, opt_id,
+                        v.verdict, v.confidence,
+                        diff_prefix + v.diff_notes, judge_model, now,
+                    ),
+                )
+                mapping_id = cur.lastrowid
+
+            saved_options.append({
+                "competitor_option_id": opt_id,
+                "name": opt.name,
+                "price": opt.price,
+                "currency": opt.currency,
+                "pricing_basis": opt.fingerprint.pricing_basis or "unknown",
+                "verdict": v.verdict if v is not None else None,
+                "confidence": float(v.confidence) if v is not None else None,
+                "diff_notes": v.diff_notes if v is not None else None,
+                "mapping_id": mapping_id if is_target else None,
+                "is_target": is_target,
+            })
 
         c.commit()
 
+    # Legacy per-option fields describe the auto-mapped option (or the first
+    # one, if nothing was mapped) so old clients keep working.
+    primary = saved_options[best_idx] if best_idx >= 0 else saved_options[0]
     return AddByUrlResponse(
         mapping_id=mapping_id,
         rayna_option_id=req.rayna_option_id,
-        competitor_option_id=competitor_option_id,
+        competitor_option_id=primary["competitor_option_id"],
         seller_domain=seller_domain,
         listing_url=req.url,
-        verdict=verdict.verdict,
-        confidence=verdict.confidence,
-        diff_notes=verdict.diff_notes,
+        verdict=(best_verdict.verdict if best_verdict else "different"),
+        confidence=float(best_verdict.confidence if best_verdict else 0.0),
+        diff_notes=(best_verdict.diff_notes if best_verdict else "Could not adjudicate."),
         saved_mapping=should_save_mapping,
-        competitor_name=extracted.name,
-        competitor_price=extracted.price,
-        competitor_currency=extracted.currency,
-        competitor_pricing_basis=extracted.fingerprint.pricing_basis or "unknown",
+        competitor_name=primary["name"],
+        competitor_price=primary["price"],
+        competitor_currency=primary["currency"],
+        competitor_pricing_basis=primary["pricing_basis"],
+        all_options=[ExtractedCompetitorOption(**o) for o in saved_options],
     )
 
 

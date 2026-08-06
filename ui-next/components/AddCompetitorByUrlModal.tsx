@@ -299,42 +299,88 @@ function ResultView({
   data: AddByUrlResponse;
   onDone: () => void;
 }) {
+  const options = data.all_options ?? [];
+  const nMapped = options.filter((o) => o.is_target).length;
+  const nSavedOnly = options.length - nMapped;
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <VerdictBadge verdict={data.verdict} confidence={data.confidence} />
+        <span className="text-[13px] font-semibold text-[#101828]">
+          Extracted {options.length} option{options.length === 1 ? "" : "s"}
+        </span>
         <span className="text-[11px] text-[#667085] font-mono">
           {data.seller_domain}
         </span>
-        {!data.saved_mapping && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5  text-[10.5px] font-semibold bg-[#FBF1DE] text-[#9A6510] border border-[#EFD8A6]">
-            <AlertTriangle className="w-3 h-3" />
-            competitor saved, not mapped
+        {nMapped > 0 && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[999px] text-[10.5px] font-semibold bg-[#ECFDF3] text-[#067647] border border-[#ABEFC6]">
+            {nMapped} auto-mapped
+          </span>
+        )}
+        {nSavedOnly > 0 && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[999px] text-[10.5px] font-semibold bg-[#F2F4F7] text-[#475467] border border-[#E4E7EC]">
+            {nSavedOnly} saved
           </span>
         )}
       </div>
-      <div className=" border border-[#E4E7EC] bg-white px-4 py-3">
-        <div className="text-[13px] text-[#101828] leading-snug mb-1.5">
-          {data.competitor_name}
+
+      {nSavedOnly > 0 && (
+        <div className="text-[11.5px] text-[#667085] leading-snug">
+          Non-target options are saved as competitors and available in the
+          workspace — map them to other Rayna options one at a time.
         </div>
-        <div className="text-[12px] text-[#475467] tnum">
-          <span className="font-semibold text-[#101828]">
-            {fmtMoney(data.competitor_price, data.competitor_currency)}
+      )}
+
+      <div className="space-y-1.5 max-h-[360px] overflow-y-auto pr-1">
+        {options.map((o) => (
+          <div
+            key={o.competitor_option_id}
+            className={`border rounded-[9px] px-3 py-2 flex items-start gap-3 ${
+              o.is_target
+                ? "border-[#ABEFC6] bg-[#ECFDF3]"
+                : "border-[#E4E7EC] bg-white"
+            }`}
+          >
+            <div className="min-w-0 flex-1">
+              <div className="text-[12.5px] font-semibold text-[#101828] leading-snug">
+                {o.name}
+              </div>
+              <div className="text-[11px] text-[#475467] tnum mt-0.5">
+                <span className="font-semibold text-[#101828]">
+                  {fmtMoney(o.price, o.currency)}
+                </span>
+                <span className="mx-1.5 text-[#D0D5DD]">·</span>
+                <span className="font-mono">{fmtBasis(o.pricing_basis)}</span>
+              </div>
+            </div>
+            <div className="shrink-0 flex flex-col items-end gap-1">
+              {o.is_target && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded-[999px] text-[9.5px] font-bold uppercase tracking-[0.05em] bg-[#067647] text-white">
+                  target
+                </span>
+              )}
+              {o.verdict && o.confidence != null && (
+                <VerdictBadge verdict={o.verdict} confidence={o.confidence} />
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {data.diff_notes && (
+        <div className="text-[11.5px] text-[#475467] italic border-l-2 border-[#E4E7EC] pl-3 leading-snug">
+          <span className="font-semibold not-italic text-[#344054]">
+            Claude on the auto-mapped option:{" "}
           </span>
-          <span className="mx-1.5 text-[#D5D7DC]">·</span>
-          <span className="font-mono">
-            {fmtBasis(data.competitor_pricing_basis)}
-          </span>
+          {data.diff_notes}
         </div>
-      </div>
-      <div className="text-[12.5px] text-[#475467] italic border-l-2 border-[#E4E7EC] pl-3 leading-snug">
-        {data.diff_notes}
-      </div>
+      )}
+
       <div className="flex justify-end pt-1">
         <button
           type="button"
           onClick={onDone}
-          className="inline-flex items-center gap-1.5 px-4 py-2  text-[13px] font-semibold bg-[#EA580C] text-white hover:bg-[#C2410C] transition-colors"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[9px] text-[13px] font-semibold bg-[#EA580C] text-white hover:bg-[#C2410C] transition-colors"
         >
           Done
         </button>

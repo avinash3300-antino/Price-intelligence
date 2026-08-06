@@ -20,7 +20,7 @@ import httpx
 from anthropic import Anthropic
 
 from src import config, map_options
-from src.models import ExtractedOption
+from src.models import ExtractedOption, ExtractionResult
 
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -282,7 +282,29 @@ def _fetch_with_playwright(url: str) -> tuple[int, str] | None:
 
 
 FIRECRAWL_ENDPOINT = "https://api.firecrawl.dev/v1/scrape"
-FIRECRAWL_TIMEOUT_S = 90
+FIRECRAWL_TIMEOUT_S = 120  # covers a 60s server-side timeout + queue/network
+
+
+def _canonicalize_for_firecrawl(url: str) -> str:
+    """Some sellers serve a JS-only redirect on the bare URL that Firecrawl's
+    engines can't follow (SCRAPE_ALL_ENGINES_FAILED). We know a few of these
+    up front and rewrite the URL to a canonical form that Firecrawl scrapes
+    reliably. This is applied only for stage-4 (Firecrawl) — the httpx /
+    curl-cffi / Playwright stages either follow the redirect themselves or
+    already work with the bare URL."""
+    from urllib.parse import urlparse, urlunparse
+
+    p = urlparse(url)
+    host = (p.hostname or "").lower()
+
+    # Klook: bare /activity/{id}-... redirects client-side to /en-XX/activity/
+    # which Firecrawl can't handle. Inject en-AE so the scrape lands on the
+    # UAE storefront and Klook quotes prices in AED — matches every Rayna
+    # target in this project and avoids FX conversion in the gap display.
+    if host == "www.klook.com" and p.path.startswith("/activity/"):
+        return urlunparse(p._replace(path=f"/en-AE{p.path}"))
+
+    return url
 
 
 def _fetch_with_firecrawl(url: str) -> tuple[int, str] | None:
@@ -301,6 +323,9 @@ def _fetch_with_firecrawl(url: str) -> tuple[int, str] | None:
     paste-text fallback."""
     if not getattr(config, "FIRECRAWL_KEY", None):
         return None
+    target = _canonicalize_for_firecrawl(url)
+    if target != url:
+        print(f"[add_by_url] firecrawl canonicalised {url} -> {target}")
     try:
         r = httpx.post(
             FIRECRAWL_ENDPOINT,
@@ -309,13 +334,20 @@ def _fetch_with_firecrawl(url: str) -> tuple[int, str] | None:
                 "Content-Type": "application/json",
             },
             json={
-                "url": url,
+                "url": target,
                 "formats": ["markdown"],
-                "onlyMainContent": True,
-                # Modest wait so lazy-hydrated pieces (price, itinerary)
-                # land in the rendered DOM before Firecrawl serialises.
+                # OTAs (Klook, GYG) put the package picker in a sidebar or
+                # slide-out modal that Firecrawl's onlyMainContent heuristic
+                # strips out. Keep the full page — Claude filters the noise.
+                "onlyMainContent": False,
+                # Heavy OTA pages (Klook, GYG package pickers) take longer
+                # than Firecrawl's 30s default. Give them up to 60s to
+                # render before Firecrawl gives up.
+                "timeout": 60000,
                 "waitFor": 3000,
             },
+            # Client-side wait must exceed Firecrawl-side timeout + a buffer
+            # for their queue and our network round-trip.
             timeout=FIRECRAWL_TIMEOUT_S,
         )
     except httpx.HTTPError as e:
@@ -436,20 +468,42 @@ def fetch_url_as_text(url: str) -> tuple[str, str | None]:
     return text, title
 
 
-# ---------- Claude: extract one competitor option from text ----------
+# ---------- Claude: extract ALL bookable options from text ----------
 
-_EXTRACT_SYSTEM = """You are extracting a single bookable OPTION from a scraped seller \
-product page.
+_EXTRACT_SYSTEM = """You are extracting every distinct bookable OPTION from a scraped \
+seller product page.
 
-Return exactly ONE option — the primary / most-representative variant on the page. \
-If the page shows multiple variants (e.g. "with transfer" vs "without transfer"), pick \
-the one whose price is most prominently displayed. Do NOT invent options that aren't \
-in the text.
+Pages on Klook, GetYourGuide, Viator, Headout, and similar OTAs often list many \
+packages on one URL — different group sizes, adult/child combos, tiers, times, \
+add-ons. Extract EACH ONE as its own option. Do NOT collapse them into one \
+representative variant. Do NOT invent options that aren't in the text.
+
+CRITICAL — ALWAYS NORMALISE TO PER SINGLE ADULT
+=================================================
+Rayna's catalog stores every option on a per-adult basis so the workspace \
+can compare like-for-like. You MUST match that convention:
+
+  • `pricing_basis` should be "per_adult" whenever the option can be \
+priced per single adult ticket.
+  • `price` must be the price for ONE adult.
+  • If the seller quotes a bundle price (e.g. "Group of 3: $186.75" or \
+"Family pack for 2 adults + 2 kids: $250"), DIVIDE it out to a per-adult \
+equivalent and mention the division in `notes` (e.g. "Group price $186.75 \
+for 3 adults; per_adult = $62.25").
+  • If a package genuinely can't be split down (e.g. a private safari \
+priced per-vehicle regardless of headcount), set `pricing_basis` to \
+"private_group" / "per_vehicle" / "per_boat" as appropriate, keep the \
+bundle price as-is, and flag it in `notes` so the reviewer knows the \
+price is not directly comparable to a per-adult Rayna option.
+  • If the same option is offered on multiple dates but the price is \
+identical, extract ONCE. If prices differ by date, extract the primary \
+"from" price and mention the date range in `notes`.
 
 Fingerprint rules (same as the rest of the pipeline):
 
 1. `pricing_basis`: per_adult, per_child, private_group, per_vehicle, per_boat, \
-per_yacht, or unknown. Most attraction tickets and SIC tours are per_adult.
+per_yacht, or unknown. Default to per_adult; only use the others when the \
+option genuinely can't be priced per single adult (see rule above).
 
 2. Extract `inclusions` and `exclusions` as short atomic items when the page lists them.
 
@@ -464,9 +518,21 @@ For non-refundable, leave null and mention in `notes`.
 
 6. `transfer_included` / `meal_included`: only set true/false if explicit.
 
-7. If a field isn't stated on the page, leave it empty. Don't invent.
+7. If a field isn't stated on the page for a given option, leave it empty. Don't \
+invent. Some options may share fields (e.g. cancellation) — repeat the value on each.
 
-8. Output ONLY via the `record_option` tool."""
+8. Each option's `name` must be distinct and disambiguate it from the others \
+(e.g. "1-day ticket standard adult" vs "1-day ticket express-lane adult"). \
+When you derive a per-adult price from a bundle, keep the bundle wording in \
+the name so a reviewer can trace it (e.g. "Group of 3 (per adult, derived)").
+
+9. If the page shows only one option, return a single-element list.
+
+10. Output ONLY via the `record_options` tool. You MUST always include the \
+`options` key in your tool input, even if the list is empty. If the page \
+genuinely has no visible bookable options (e.g. it's a listing/category page \
+or the content is blank), call the tool with `{"options": []}` — never call \
+it with a bare `{}`."""
 
 
 _EXTRACT_USER_TEMPLATE = """SELLER URL: {url}
@@ -475,29 +541,67 @@ PAGE TITLE: {title}
 PAGE CONTENT (trimmed):
 {content}
 
-Extract the single primary bookable option. Use the `record_option` tool."""
+Extract every distinct bookable option on the page. Use the `record_options` tool."""
 
 
 def _extract_tools() -> list[dict[str, Any]]:
     return [
         {
-            "name": "record_option",
-            "description": "Record the single primary option extracted from this seller page.",
-            "input_schema": ExtractedOption.model_json_schema(),
+            "name": "record_options",
+            "description": (
+                "Record ALL distinct bookable options extracted from this seller "
+                "page. One entry per option/package/variant."
+            ),
+            "input_schema": ExtractionResult.model_json_schema(),
         }
     ]
 
 
-def extract_competitor_option(
+import re as _re
+
+# Firecrawl's markdown output on image-heavy OTA pages (Klook especially) is
+# ~40% base64/CDN image URLs that carry zero pricing signal but eat the
+# extractor's char budget. Strip them before Claude sees the content so the
+# package picker further down the page actually makes the cut.
+_MD_IMAGE_RE = _re.compile(r"!\[[^\]]*\]\([^)]*\)")
+_MD_LINK_URL_RE = _re.compile(r"\((https?://[^)]{80,})\)")
+
+
+def _compact_for_extraction(content: str) -> str:
+    """Drop markdown image references and long inline URLs, collapse blank lines.
+    Keeps the visible text and short/named links; strips the CDN noise."""
+    stripped = _MD_IMAGE_RE.sub("", content)
+    stripped = _MD_LINK_URL_RE.sub("()", stripped)
+    # Collapse 3+ blank lines to a single blank line.
+    stripped = _re.sub(r"\n{3,}", "\n\n", stripped)
+    return stripped.strip()
+
+
+def extract_competitor_options(
     client: Anthropic,
     content: str,
     url: str,
     page_title: str | None,
-) -> ExtractedOption:
-    """Claude extracts one ExtractedOption from raw text (fetched OR pasted)."""
-    trimmed = content.strip()
-    if len(trimmed) > 32000:
-        trimmed = trimmed[:32000]
+) -> list[ExtractedOption]:
+    """Claude extracts every distinct bookable option from the raw text.
+
+    Returns a list — empty is impossible in practice (Claude falls back to
+    a single-element list if the page has only one option). If Claude fails
+    to call the tool, raises RuntimeError so the caller can surface the
+    paste-text fallback."""
+    compacted = _compact_for_extraction(content)
+    # Sonnet 4.6 handles 200K context; we can afford a generous window so
+    # bloated OTA markdown (Klook, GYG) doesn't get truncated before the
+    # package picker further down the page.
+    MAX_CHARS = 120000
+    if len(compacted) > MAX_CHARS:
+        trimmed = compacted[:MAX_CHARS]
+    else:
+        trimmed = compacted
+    print(
+        f"[add_by_url] extractor input: raw={len(content)} chars -> "
+        f"compacted={len(compacted)} -> sent={len(trimmed)}"
+    )
 
     user_text = _EXTRACT_USER_TEMPLATE.format(
         url=url,
@@ -507,7 +611,12 @@ def extract_competitor_option(
 
     resp = client.messages.create(
         model=config.CLAUDE_ADJUDICATOR_MODEL,
-        max_tokens=2048,
+        # Klook / GYG pages list 20-40 packages once you include group-size
+        # variants; 4096 tokens truncates mid-tool-call and Anthropic returns
+        # an empty tool_use (stop_reason=max_tokens). Sonnet 4.6 supports up
+        # to 64K output tokens natively — 16K is plenty of headroom for the
+        # busiest OTA pages while staying well under limits.
+        max_tokens=16000,
         system=[
             {
                 "type": "text",
@@ -516,26 +625,39 @@ def extract_competitor_option(
             }
         ],
         tools=_extract_tools(),
-        tool_choice={"type": "tool", "name": "record_option"},
+        tool_choice={"type": "tool", "name": "record_options"},
         messages=[{"role": "user", "content": user_text}],
     )
 
     tool_blocks = [
-        b for b in resp.content if b.type == "tool_use" and b.name == "record_option"
+        b for b in resp.content if b.type == "tool_use" and b.name == "record_options"
     ]
     if not tool_blocks:
         raise RuntimeError(
-            f"Claude did not call record_option; stop_reason={resp.stop_reason}"
+            f"Claude did not call record_options; stop_reason={resp.stop_reason}"
         )
 
     raw = dict(tool_blocks[0].input)
-    fp = raw.get("fingerprint")
-    if isinstance(fp, dict):
-        for k, v in list(fp.items()):
-            if v == "":
-                fp[k] = None
-        raw["fingerprint"] = fp
-    return ExtractedOption.model_validate(raw)
+    # Claude occasionally abstains and calls the tool with `{}` — accept that
+    # as "no options found" instead of surfacing a Pydantic ValidationError.
+    if "options" not in raw or raw.get("options") is None:
+        print(
+            f"[add_by_url] extractor returned no options key (raw keys={list(raw.keys())}); "
+            f"stop_reason={resp.stop_reason}"
+        )
+        raw["options"] = []
+    # Same defensive coercion the enricher does — Sonnet sometimes emits "" for
+    # Optional[int] fields which Pydantic rejects.
+    for opt in raw.get("options") or []:
+        if not isinstance(opt, dict):
+            continue
+        fp = opt.get("fingerprint")
+        if isinstance(fp, dict):
+            for k, v in list(fp.items()):
+                if v == "":
+                    fp[k] = None
+    parsed = ExtractionResult.model_validate(raw)
+    return list(parsed.options)
 
 
 # ---------- Claude: adjudicate the pair ----------
