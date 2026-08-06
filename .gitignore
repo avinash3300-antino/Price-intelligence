@@ -17,6 +17,7 @@ data/*.sqlite-journal
 data/firecrawl_cache/
 data/searchapi_cache/
 data/feed_cache.json
+data/fx_rates.json
 logs/
 *.log
 

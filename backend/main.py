@@ -248,6 +248,8 @@ class MappedItem(BaseModel):
     mapping_id: int
     product_id: int
     product_name: str
+    product_country: Optional[str] = None
+    product_city: Optional[str] = None
     rayna_option_id: int
     rayna_option_name: str
     rayna_price: Optional[float] = None
@@ -271,6 +273,9 @@ class ReviewItem(BaseModel):
     mapping_id: int
     product_id: int
     product_name: str
+    product_country: Optional[str] = None
+    product_city: Optional[str] = None
+    rayna_option_id: Optional[int] = None
     rayna_option_name: str
     rayna_price: Optional[float] = None
     rayna_currency: Optional[str] = None
@@ -481,6 +486,8 @@ def review_queue() -> list[ReviewItem]:
         rows = c.execute(
             """SELECT m.id AS mapping_id, m.verdict, m.confidence, m.diff_notes,
                       p.id AS product_id, p.name AS product_name,
+                      p.country AS product_country, p.city AS product_city,
+                      ro.id AS rayna_option_id,
                       ro.name AS rayna_option_name, ro.price AS rayna_price,
                       ro.currency AS rayna_currency, ro.pricing_basis AS rayna_basis,
                       co.name AS competitor_option_name, co.price AS competitor_price,
@@ -492,10 +499,11 @@ def review_queue() -> list[ReviewItem]:
                JOIN products p ON p.id = ro.rayna_product_id
                JOIN competitor_listings cl ON cl.id = co.competitor_listing_id
                JOIN competitors c ON c.id = cl.competitor_id
-               WHERE m.confidence < 0.7
-                  OR (ro.pricing_basis != co.pricing_basis
-                      AND ro.pricing_basis != 'unknown'
-                      AND co.pricing_basis != 'unknown')
+               WHERE (m.human_reviewed IS NULL OR m.human_reviewed = 0)
+                 AND (m.confidence < 0.7
+                      OR (ro.pricing_basis != co.pricing_basis
+                          AND ro.pricing_basis != 'unknown'
+                          AND co.pricing_basis != 'unknown'))
                ORDER BY m.confidence ASC""",
         ).fetchall()
 
@@ -873,7 +881,7 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
     # anthropic + src module load cost on every cold start.
     from anthropic import Anthropic
 
-    from src import add_by_url, config
+    from src import add_by_url, config, fx_rates
 
     with conn() as c:
         # 1. Validate Rayna option + get its anchor product
@@ -1053,9 +1061,21 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
         )
         listing_id = cur.lastrowid
 
-        # 7c. Insert every extracted option, mapping the best one only
+        # 7c. Insert every extracted option, mapping the best one only.
+        # Every price is normalized to AED here using the daily fx_rates cache
+        # so the modal + gap comparison never has to guess at conversion. The
+        # ORIGINAL price + currency the seller quoted are stashed inside
+        # raw_extracted_json (opt.model_dump_json) so we can always re-audit.
         mapping_id: Optional[int] = None
         for i, opt in enumerate(extracted_list):
+            original_currency = (opt.currency or "").strip().upper() or None
+            aed_price = fx_rates.to_aed(opt.price, original_currency)
+            # If conversion failed (unknown currency, no rate), fall through
+            # to the raw values so we never blank a row — the source of truth
+            # is still preserved in raw_extracted_json.
+            stored_price = aed_price if aed_price is not None else opt.price
+            stored_currency = "AED" if aed_price is not None else original_currency
+
             cur = c.execute(
                 """INSERT INTO options
                     (source, competitor_listing_id, name, pricing_basis,
@@ -1066,8 +1086,8 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
                     listing_id,
                     opt.name,
                     opt.fingerprint.pricing_basis or "unknown",
-                    opt.price,
-                    opt.currency,
+                    stored_price,
+                    stored_currency,
                     rayna["market"],
                     opt.fingerprint.model_dump_json(),
                     opt.model_dump_json(),
@@ -1097,8 +1117,8 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
             saved_options.append({
                 "competitor_option_id": opt_id,
                 "name": opt.name,
-                "price": opt.price,
-                "currency": opt.currency,
+                "price": stored_price,
+                "currency": stored_currency,
                 "pricing_basis": opt.fingerprint.pricing_basis or "unknown",
                 "verdict": v.verdict if v is not None else None,
                 "confidence": float(v.confidence) if v is not None else None,
@@ -1146,6 +1166,50 @@ def delete_mapping(mapping_id: int):
         return None
 
 
+class ReviewDecisionRequest(BaseModel):
+    approve: bool
+
+
+class ReviewDecisionResponse(BaseModel):
+    mapping_id: int
+    action: str  # "approved" | "rejected"
+
+
+@app.post(
+    "/api/mappings/{mapping_id}/review",
+    response_model=ReviewDecisionResponse,
+    status_code=200,
+)
+def review_mapping(mapping_id: int, req: ReviewDecisionRequest) -> ReviewDecisionResponse:
+    """Resolve a review-queue entry.
+
+    ``approve=true`` — set human_reviewed=1 with the existing verdict so the
+    mapping stays but drops off the queue.
+    ``approve=false`` — delete the mapping outright. The competitor option row
+    stays available in the workspace to be remapped elsewhere.
+    """
+    with conn() as c:
+        row = c.execute(
+            "SELECT verdict FROM mappings WHERE id=?", (mapping_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Mapping not found")
+        if req.approve:
+            c.execute(
+                """UPDATE mappings
+                     SET human_reviewed=1,
+                         human_verdict=?
+                   WHERE id=?""",
+                (row["verdict"], mapping_id),
+            )
+            action = "approved"
+        else:
+            c.execute("DELETE FROM mappings WHERE id=?", (mapping_id,))
+            action = "rejected"
+        c.commit()
+        return ReviewDecisionResponse(mapping_id=mapping_id, action=action)
+
+
 @app.get("/api/mapped", response_model=list[MappedItem])
 def mapped_list(date: Optional[str] = None) -> list[MappedItem]:
     """List all manual mappings. When ``date=YYYY-MM-DD`` is passed, both
@@ -1157,6 +1221,7 @@ def mapped_list(date: Optional[str] = None) -> list[MappedItem]:
         rows = c.execute(
             """SELECT m.id AS mapping_id, m.created_at,
                       p.id AS product_id, p.name AS product_name,
+                      p.country AS product_country, p.city AS product_city,
                       ro.id AS rayna_option_id, ro.name AS rayna_option_name,
                       ro.price AS rayna_price, ro.currency AS rayna_currency,
                       ro.pricing_basis AS rayna_basis,

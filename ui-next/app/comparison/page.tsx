@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { Layers, Trophy, Flag, ArrowRight, Store, CheckCircle2 } from "lucide-react";
+import { Layers, Trophy, Flag, ArrowRight, Store } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
+import { ComparisonProductsTable } from "@/components/ComparisonProductsTable";
 import { getDashboard, type PipelineStats, type DashboardStat } from "@/lib/api";
-import { fmtMoney, fmtPercent, fmtAED } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -43,29 +43,7 @@ export default async function ComparisonPage() {
         )}
 
         <div className="mt-7">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-baseline gap-2.5">
-              <h2 className="text-[16px] font-semibold -tracking-[0.01em]">
-                Tracked products
-              </h2>
-              <span className="tnum text-[12.5px] text-[#98A2B3]">
-                {pipeline.products} in UAE · Activities
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-white border border-[#E4E7EC]  overflow-hidden">
-            <div className="grid grid-cols-[2.4fr_0.8fr_1fr_1.4fr_0.9fr] gap-3 px-5 py-[11px] bg-[#F9FAFB] border-b border-[#E4E7EC] text-[11px] font-semibold tracking-[0.04em] uppercase text-[#98A2B3]">
-              <span>Product</span>
-              <span className="text-center">Options</span>
-              <span className="text-center">Sellers</span>
-              <span>Price position</span>
-              <span className="text-right">Refreshed</span>
-            </div>
-            {stats.map((s) => (
-              <ProductRow key={s.product.id} stat={s} />
-            ))}
-          </div>
+          <ComparisonProductsTable stats={stats} />
         </div>
       </div>
     </AppLayout>
@@ -168,100 +146,3 @@ function KPICard({
   );
 }
 
-function ProductRow({ stat }: { stat: DashboardStat }) {
-  const { product, option_count, seller_count, cheapest_competitor } = stat;
-
-  let position: { label: string; color: string; bg: string; border: string } = {
-    label: "No match yet",
-    color: "#7A7F88",
-    bg: "#F2F3F5",
-    border: "#E2E3E7",
-  };
-  if (cheapest_competitor) {
-    const pct = cheapest_competitor.gap_pct;
-    if (pct > 1) {
-      position = {
-        label: `Cheapest · ${fmtPercent(Math.abs(pct))} under`,
-        color: "#C2410C",
-        bg: "#FFF4ED",
-        border: "#FDBA74",
-      };
-    } else if (pct < -1) {
-      position = {
-        label: `${fmtPercent(Math.abs(pct))} over market`,
-        color: "#B5342C",
-        bg: "#FBEAE8",
-        border: "#F1C7C2",
-      };
-    } else {
-      position = {
-        label: "Matched at market",
-        color: "#9A6510",
-        bg: "#FBF1DE",
-        border: "#EFD8A6",
-      };
-    }
-  }
-
-  return (
-    <Link
-      href={`/comparison/product/${product.id}`}
-      className="grid grid-cols-[2.4fr_0.8fr_1fr_1.4fr_0.9fr] gap-3 items-center px-5 py-[14px] border-b border-[#F2F4F7] last:border-b-0 hover:bg-[#F9FAFB] transition-colors"
-    >
-      <div className="flex items-center gap-[11px] min-w-0">
-        <span className="w-[34px] h-[34px] shrink-0  bg-[#FFF4ED] border border-[#3D424B] grid place-items-center text-[16px]">
-          {emojiFor(product.name)}
-        </span>
-        <div className="min-w-0">
-          <div className="text-[13.5px] font-semibold text-[#101828] truncate">
-            {product.name}
-          </div>
-          <div className="text-[11.5px] text-[#98A2B3]">
-            Activities · {product.city}
-          </div>
-        </div>
-      </div>
-      <span className="tnum text-center text-[13px] font-medium text-[#475467]">
-        {option_count}
-      </span>
-      <span className="tnum text-center text-[13px] font-medium text-[#475467]">
-        {seller_count}
-      </span>
-      <div>
-        <span
-          className="inline-flex items-center gap-1.5 px-2.5 py-[3px]  text-[11.5px] font-semibold border"
-          style={{
-            background: position.bg,
-            color: position.color,
-            borderColor: position.border,
-          }}
-        >
-          <span
-            className="w-[6px] h-[6px] rounded-full"
-            style={{ background: position.color }}
-          />
-          {position.label}
-        </span>
-      </div>
-      <span className="tnum text-right text-[11.5px] text-[#98A2B3]">
-        {cheapest_competitor
-          ? `${fmtAED(cheapest_competitor.price, cheapest_competitor.currency)} on ${cheapest_competitor.domain}`
-          : "—"}
-      </span>
-    </Link>
-  );
-}
-
-function emojiFor(name: string): string {
-  const n = name.toLowerCase();
-  if (n.includes("burj")) return "🌆";
-  if (n.includes("desert") || n.includes("dune")) return "🏜";
-  if (n.includes("dinner")) return "🍽";
-  if (n.includes("fish")) return "🎣";
-  if (n.includes("camel")) return "🐪";
-  if (n.includes("city tour")) return "🚌";
-  if (n.includes("yacht")) return "⛵";
-  if (n.includes("sharjah")) return "🕌";
-  if (n.includes("shopping")) return "🛍";
-  return "📍";
-}

@@ -176,6 +176,8 @@ export interface MappedItem {
   mapping_id: number;
   product_id: number;
   product_name: string;
+  product_country: string | null;
+  product_city: string | null;
   rayna_option_id: number;
   rayna_option_name: string;
   rayna_price: number | null;
@@ -198,6 +200,9 @@ export interface ReviewItem {
   mapping_id: number;
   product_id: number;
   product_name: string;
+  product_country: string | null;
+  product_city: string | null;
+  rayna_option_id: number | null;
   rayna_option_name: string;
   rayna_price: number | null;
   rayna_currency: string | null;

@@ -32,6 +32,7 @@ import {
 } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { AddCompetitorByUrlModal } from "@/components/AddCompetitorByUrlModal";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 interface Props {
   initialProducts: DashboardStat[];
@@ -152,7 +153,11 @@ export function MappingView({ initialProducts }: Props) {
   const initialDate = (() => {
     const raw = searchParams?.get("date");
     if (raw && /^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
-    return new Date().toISOString().slice(0, 10);
+    // Default to tomorrow — most OTAs price same-day differently (cutoff /
+    // sold-out risk), so tomorrow gives a cleaner apples-to-apples baseline.
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
   })();
 
   const [country, setCountry] = useState<string | null>(initialCountry);
@@ -161,7 +166,7 @@ export function MappingView({ initialProducts }: Props) {
     initialProduct,
   );
   const [chosenOption, setChosenOption] = useState<OptionListItem | null>(null);
-  // Default to today's date so prices reflect a real bookable date immediately;
+  // Default to tomorrow so same-day cutoffs don't skew the comparison;
   // user can change to any date within the next 60 days.
   const [chosenDate, setChosenDate] = useState<string>(initialDate);
 
@@ -1092,6 +1097,26 @@ function ComparePanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  // Pending map/unmap actions parked here until the user confirms in the modal.
+  // Names are resolved from `workspace` for the dialog body — the API only
+  // needs the IDs.
+  type PendingMap = {
+    kind: "map";
+    compId: number;
+    raynaId: number;
+    compName: string;
+    raynaName: string;
+    sellerDomain: string;
+  };
+  type PendingUnmap = {
+    kind: "unmap";
+    mappingId: number;
+    compName: string;
+    raynaName: string;
+    sellerDomain: string;
+  };
+  const [pending, setPending] = useState<PendingMap | PendingUnmap | null>(null);
+  const [pendingBusy, setPendingBusy] = useState(false);
 
   // build the workspace URL with the chosen date so the backend swaps in
   // per-date observations from price_observations.
@@ -1133,40 +1158,130 @@ function ComparePanel({
     });
   }
 
-  async function mapOption(competitorOptionId: number, raynaOptionId: number) {
-    const r = await fetch(`${API_BASE_PUBLIC}/api/mappings/manual`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        rayna_option_id: raynaOptionId,
-        competitor_option_id: competitorOptionId,
-      }),
-    });
-    if (!r.ok) {
-      let detail = `Mapping failed (${r.status})`;
-      try {
-        const body = await r.json();
-        if (body && typeof body.detail === "string") detail = body.detail;
-      } catch {
-        /* not JSON */
+  // Look up option/seller display names from the loaded workspace so the
+  // confirm dialog can show what's actually being touched. Falls back to
+  // "this option" if we can't find it (shouldn't happen — the caller only
+  // fires with IDs that exist in the workspace).
+  function resolveNamesForMap(
+    competitorOptionId: number,
+    raynaOptionId: number,
+  ): { compName: string; raynaName: string; sellerDomain: string } {
+    let compName = "this competitor option";
+    let raynaName = "this Rayna option";
+    let sellerDomain = "";
+    if (workspace) {
+      const r = workspace.rayna_options.find((o) => o.id === raynaOptionId);
+      if (r) raynaName = r.name;
+      for (const s of workspace.sellers) {
+        const c = s.options.find((o) => o.option_id === competitorOptionId);
+        if (c) {
+          compName = c.name;
+          sellerDomain = s.seller_domain;
+          break;
+        }
       }
-      toast.error(detail);
-      return;
     }
-    toast.success("Mapped");
-    refresh();
+    return { compName, raynaName, sellerDomain };
   }
 
-  async function unmap(mappingId: number) {
-    const r = await fetch(`${API_BASE_PUBLIC}/api/mappings/${mappingId}`, {
-      method: "DELETE",
-    });
-    if (!r.ok && r.status !== 204) {
-      toast.error(`Unmap failed (${r.status})`);
-      return;
+  function resolveNamesForUnmap(mappingId: number): {
+    compName: string;
+    raynaName: string;
+    sellerDomain: string;
+    raynaOptionId?: number;
+  } {
+    if (workspace) {
+      for (const s of workspace.sellers) {
+        for (const c of s.options) {
+          if (c.mapping && c.mapping.mapping_id === mappingId) {
+            return {
+              compName: c.name,
+              raynaName: c.mapping.rayna_option_name,
+              sellerDomain: s.seller_domain,
+              raynaOptionId: c.mapping.rayna_option_id,
+            };
+          }
+        }
+      }
     }
-    toast.success("Unmapped");
-    refresh();
+    return {
+      compName: "this competitor option",
+      raynaName: "the Rayna option",
+      sellerDomain: "",
+    };
+  }
+
+  function mapOption(competitorOptionId: number, raynaOptionId: number) {
+    const names = resolveNamesForMap(competitorOptionId, raynaOptionId);
+    setPending({
+      kind: "map",
+      compId: competitorOptionId,
+      raynaId: raynaOptionId,
+      ...names,
+    });
+    // Return a resolved promise so existing onMap callers that await this
+    // don't hang — the actual API call happens when the user confirms.
+    return Promise.resolve();
+  }
+
+  function unmap(mappingId: number): Promise<void> {
+    const { compName, raynaName, sellerDomain } = resolveNamesForUnmap(mappingId);
+    setPending({
+      kind: "unmap",
+      mappingId,
+      compName,
+      raynaName,
+      sellerDomain,
+    });
+    return Promise.resolve();
+  }
+
+  async function runPendingMap(p: PendingMap) {
+    setPendingBusy(true);
+    try {
+      const r = await fetch(`${API_BASE_PUBLIC}/api/mappings/manual`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rayna_option_id: p.raynaId,
+          competitor_option_id: p.compId,
+        }),
+      });
+      if (!r.ok) {
+        let detail = `Mapping failed (${r.status})`;
+        try {
+          const body = await r.json();
+          if (body && typeof body.detail === "string") detail = body.detail;
+        } catch {
+          /* not JSON */
+        }
+        toast.error(detail);
+        return;
+      }
+      toast.success("Mapped");
+      setPending(null);
+      refresh();
+    } finally {
+      setPendingBusy(false);
+    }
+  }
+
+  async function runPendingUnmap(p: PendingUnmap) {
+    setPendingBusy(true);
+    try {
+      const r = await fetch(`${API_BASE_PUBLIC}/api/mappings/${p.mappingId}`, {
+        method: "DELETE",
+      });
+      if (!r.ok && r.status !== 204) {
+        toast.error(`Unmap failed (${r.status})`);
+        return;
+      }
+      toast.success("Unmapped");
+      setPending(null);
+      refresh();
+    } finally {
+      setPendingBusy(false);
+    }
   }
 
   return (
@@ -1190,6 +1305,88 @@ function ComparePanel({
           onRefresh={refresh}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={pending?.kind === "map"}
+        title="Confirm mapping"
+        body={
+          pending?.kind === "map" ? (
+            <div className="space-y-2">
+              <div>Link these two options as a like-for-like pair?</div>
+              <div className="rounded-[8px] bg-[#F9FAFB] border border-[#E4E7EC] px-3 py-2 space-y-1.5">
+                <div>
+                  <span className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-[#98A2B3]">
+                    Rayna
+                  </span>
+                  <div className="text-[13px] font-semibold text-[#101828] leading-snug">
+                    {pending.raynaName}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-[#98A2B3]">
+                    Competitor
+                    {pending.sellerDomain && (
+                      <span className="ml-1 font-mono normal-case text-[#98A2B3]">
+                        · {pending.sellerDomain}
+                      </span>
+                    )}
+                  </span>
+                  <div className="text-[13px] font-semibold text-[#101828] leading-snug">
+                    {pending.compName}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null
+        }
+        confirmLabel="Map"
+        busy={pendingBusy}
+        onConfirm={() => pending?.kind === "map" && runPendingMap(pending)}
+        onCancel={() => !pendingBusy && setPending(null)}
+      />
+
+      <ConfirmDialog
+        open={pending?.kind === "unmap"}
+        title="Unmap this pair?"
+        body={
+          pending?.kind === "unmap" ? (
+            <div className="space-y-2">
+              <div>
+                Remove the confirmed link between these two options? The
+                competitor row stays available so you can remap it later.
+              </div>
+              <div className="rounded-[8px] bg-[#F9FAFB] border border-[#E4E7EC] px-3 py-2 space-y-1.5">
+                <div>
+                  <span className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-[#98A2B3]">
+                    Rayna
+                  </span>
+                  <div className="text-[13px] font-semibold text-[#101828] leading-snug">
+                    {pending.raynaName}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-[#98A2B3]">
+                    Competitor
+                    {pending.sellerDomain && (
+                      <span className="ml-1 font-mono normal-case text-[#98A2B3]">
+                        · {pending.sellerDomain}
+                      </span>
+                    )}
+                  </span>
+                  <div className="text-[13px] font-semibold text-[#101828] leading-snug">
+                    {pending.compName}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null
+        }
+        confirmLabel="Unmap"
+        danger
+        busy={pendingBusy}
+        onConfirm={() => pending?.kind === "unmap" && runPendingUnmap(pending)}
+        onCancel={() => !pendingBusy && setPending(null)}
+      />
     </div>
   );
 }

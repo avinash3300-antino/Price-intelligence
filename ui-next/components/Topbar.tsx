@@ -66,14 +66,17 @@ export function Topbar(_: TopbarProps) {
     <header className="h-[60px] shrink-0 bg-white border-b border-[#E4E7EC] flex items-center px-6 gap-5">
       <Link
         href="/"
-        className="shrink-0 flex items-center"
+        className="shrink-0 flex flex-col items-start leading-none"
         title="Rayna Tours — Price Intelligence"
       >
         <img
-          src="/rayna-logo.svg"
+          src="/rayna-logo.png"
           alt="Rayna Tours"
           className="h-[30px] w-auto"
         />
+        <span className="mt-[3px] text-[6px] font-semibold uppercase tracking-[0.14em] text-[#101828]">
+          Price Intelligence
+        </span>
       </Link>
 
       <nav className="flex items-center h-full">
