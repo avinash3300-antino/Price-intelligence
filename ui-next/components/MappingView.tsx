@@ -21,7 +21,7 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { fmtMoney, fmtBasis, fmtAED, fmtPercent, toAED } from "@/lib/format";
+import { fmtMoney, fmtBasis, fmtAED, toAED } from "@/lib/format";
 import {
   API_BASE_PUBLIC,
   type DashboardStat,
@@ -118,12 +118,31 @@ export function MappingView({ initialProducts }: Props) {
   // Hydrate initial state from the URL so the workspace survives refresh —
   // country + city + product + option + date all round-trip through the URL.
   // This also keeps a shareable link ("open this exact selection") working.
+  // When no productId is present, auto-pick a product to showcase so the
+  // Options + Competitors columns aren't empty on first paint. Prefer a
+  // product that already has mappings; fall back to any product with options.
   const initialProduct = useMemo<DashboardStat | null>(() => {
     const raw = searchParams?.get("productId");
-    if (!raw) return null;
-    const pid = parseInt(raw, 10);
-    if (!Number.isFinite(pid)) return null;
-    return initialProducts.find((p) => p.product.id === pid) ?? null;
+    if (raw) {
+      const pid = parseInt(raw, 10);
+      if (Number.isFinite(pid)) {
+        const found = initialProducts.find((p) => p.product.id === pid);
+        if (found) return found;
+      }
+    }
+    const scopeCountry = searchParams?.get("country") ?? "United Arab Emirates";
+    const scopeCity = searchParams?.get("city") ?? "Dubai";
+    const scoped = initialProducts.filter(
+      (p) =>
+        p.option_count > 0 &&
+        (!scopeCountry || p.product.country === scopeCountry) &&
+        (!scopeCity || p.product.city === scopeCity),
+    );
+    return (
+      scoped.find((p) => p.options_mapped_count > 0) ??
+      scoped[0] ??
+      null
+    );
   }, [searchParams, initialProducts]);
 
   const initialRaynaOptionId = useMemo<number | null>(() => {
@@ -703,59 +722,77 @@ function ProductRow({
               </span>
             )}
           </div>
-          <div className="text-[12.5px] font-medium leading-snug line-clamp-2">
+          <div className="text-[13px] font-semibold leading-snug line-clamp-2">
             {p.name}
           </div>
-          <div
-            className={`text-[10.5px] mt-1 flex items-center gap-1.5 ${
-              selected ? "text-black/65" : "text-[#667085]"
-            }`}
-          >
-            <span className="tnum font-semibold">
-              {option_count} opt{option_count === 1 ? "" : "s"}
-            </span>
-            <span className={selected ? "text-black/25" : "text-[#D5D7DC]"}>·</span>
-            <span className="tnum">{seller_count} sellers</span>
-            {priceLine && (
-              <>
-                <span className={selected ? "text-black/25" : "text-[#D5D7DC]"}>·</span>
-                <span className="tnum truncate">{priceLine}</span>
-              </>
-            )}
+          {/* Meta row: opts · sellers · price on the left, mapped pill on the right
+              so nothing collides in a narrow (300px) column. */}
+          <div className="mt-1.5 flex items-center justify-between gap-2">
+            <div
+              className={`text-[10.5px] flex items-center gap-1 min-w-0 ${
+                selected ? "text-black/65" : "text-[#667085]"
+              }`}
+            >
+              <span className="tnum font-semibold whitespace-nowrap">
+                {option_count} opt{option_count === 1 ? "" : "s"}
+              </span>
+              <span className={selected ? "text-black/25" : "text-[#D0D5DD]"}>·</span>
+              <span className="tnum whitespace-nowrap">
+                {seller_count} seller{seller_count === 1 ? "" : "s"}
+              </span>
+              {priceLine && (
+                <>
+                  <span className={selected ? "text-black/25" : "text-[#D0D5DD]"}>·</span>
+                  <span className="tnum truncate">{priceLine}</span>
+                </>
+              )}
+            </div>
             {hasOptions && (
-              <>
-                <span className={selected ? "text-black/25" : "text-[#D5D7DC]"}>·</span>
-                <span
-                  className={`tnum font-medium ${
-                    options_mapped_count === 0
-                      ? selected
-                        ? "text-black/45"
-                        : "text-[#98A2B3]"
-                      : options_mapped_count === option_count
-                        ? selected
-                          ? "text-white"
-                          : "text-[#EA580C]"
-                        : selected
-                          ? "text-black/80"
-                          : "text-[#101828]"
-                  }`}
-                  title={
-                    options_mapped_count === 0
-                      ? "No competitor mapped yet"
-                      : `${options_mapped_count} of ${option_count} option${option_count === 1 ? "" : "s"} mapped to competitors`
-                  }
-                >
-                  {options_mapped_count}/{option_count} mapped
-                  {options_mapped_count > 0 && options_mapped_count === option_count && (
-                    <span aria-hidden="true"> ✓</span>
-                  )}
-                </span>
-              </>
+              <MappedPill
+                mapped={options_mapped_count}
+                total={option_count}
+                selected={selected}
+              />
             )}
           </div>
         </div>
       </button>
     </li>
+  );
+}
+
+function MappedPill({
+  mapped,
+  total,
+  selected,
+}: {
+  mapped: number;
+  total: number;
+  selected: boolean;
+}) {
+  const empty = mapped === 0;
+  const full = mapped === total && total > 0;
+  const styles = empty
+    ? selected
+      ? "bg-black/5 text-black/50 border border-transparent"
+      : "bg-[#F2F4F7] text-[#667085] border border-[#E4E7EC]"
+    : full
+      ? "bg-[#EA580C] text-white border border-transparent"
+      : selected
+        ? "bg-[#FFF4ED] text-[#C2410C] border border-[#FED7AA]"
+        : "bg-[#FFF4ED] text-[#C2410C] border border-[#FED7AA]";
+  return (
+    <span
+      className={`shrink-0 inline-flex items-center gap-1 px-1.5 py-[2px] rounded-full text-[10px] font-semibold tnum whitespace-nowrap ${styles}`}
+      title={
+        empty
+          ? "No competitor mapped yet"
+          : `${mapped} of ${total} option${total === 1 ? "" : "s"} mapped to competitors`
+      }
+    >
+      {full && <Check className="w-2.5 h-2.5" strokeWidth={3} />}
+      {mapped}/{total}
+    </span>
   );
 }
 
@@ -803,15 +840,20 @@ function OptionPanel({
         if (cancelled) return;
         const scoped = data.filter((o) => o.product_id === productId);
         setOptions(scoped);
-        if (
-          autoSelectOptionId != null &&
-          !autoSelectedRef.current &&
-          chosenOptionId == null
-        ) {
-          const match = scoped.find((o) => o.option_id === autoSelectOptionId);
-          if (match) {
+        if (!autoSelectedRef.current && chosenOptionId == null) {
+          // Priority: URL param → first option with an existing mapping →
+          // first option outright. Populates the Competitors column on
+          // landing so the user isn't staring at an empty state.
+          const byUrl =
+            autoSelectOptionId != null
+              ? scoped.find((o) => o.option_id === autoSelectOptionId)
+              : undefined;
+          const byMapped = scoped.find((o) => o.mapped_count > 0);
+          const first = scoped[0];
+          const pick = byUrl ?? byMapped ?? first;
+          if (pick) {
             autoSelectedRef.current = true;
-            onPick(match);
+            onPick(pick);
           }
         }
       })
@@ -922,11 +964,7 @@ function OptionRow({
             variant #{option.option_id.toString().slice(-5)}
           </div>
           {option.mapped_count > 0 && (
-            <span
-              className={`inline-flex items-center gap-1 text-[9.5px] font-bold uppercase tracking-[0.04em] ${
-                selected ? "text-white" : "text-[#C2410C]"
-              }`}
-            >
+            <span className="inline-flex items-center gap-1 text-[9.5px] font-bold uppercase tracking-[0.04em] text-[#C2410C]">
               <Check className="w-2.5 h-2.5" strokeWidth={3} />
               {option.mapped_count}
             </span>
@@ -936,27 +974,15 @@ function OptionRow({
           {tierLine}
         </div>
         <div className="flex items-baseline gap-2 mt-1.5">
-          <span
-            className={`tnum text-[14px] font-semibold ${
-              selected ? "text-white" : "text-[#101828]"
-            }`}
-          >
+          <span className="tnum text-[14px] font-semibold text-[#101828]">
             {option.price != null
               ? fmtMoney(option.price, option.currency)
               : "—"}
           </span>
-          <span
-            className={`text-[10.5px] font-mono ${
-              selected ? "text-black/60" : "text-[#667085]"
-            }`}
-          >
+          <span className="text-[10.5px] font-mono text-[#667085]">
             {fmtBasis(option.pricing_basis)}
           </span>
-          <span
-            className={`ml-auto text-[10.5px] ${
-              selected ? "text-black/60" : "text-[#667085]"
-            }`}
-          >
+          <span className="ml-auto text-[10.5px] text-[#667085]">
             <span className="tnum font-semibold">{option.seller_count}</span>{" "}
             sellers
           </span>
@@ -1651,65 +1677,102 @@ function SellerCard({
   onMap: (compId: number, raynaId: number) => Promise<void>;
   onUnmap: (mappingId: number) => Promise<void>;
 }) {
+  const [open, setOpen] = useState(false);
+
   const mapped = options.filter((o) => o.mapping != null).length;
   const fullyMapped = mapped === options.length && mapped > 0;
+
+  // Aggregate AED-normalized prices for the collapsed summary.
+  const aedPrices = options
+    .map((o) => toAED(o.price, o.currency))
+    .filter((v): v is number => v != null && v > 0);
+  const minAed = aedPrices.length ? Math.min(...aedPrices) : null;
+  const maxAed = aedPrices.length ? Math.max(...aedPrices) : null;
+
   return (
-    <section className="mt-6 first:mt-0">
-      {/* Slim divider header — clearly a group boundary, not another card */}
-      <div className="flex items-center gap-3 mb-3">
-        <div className="flex items-center gap-2 shrink-0">
-          <span
-            className={`w-[24px] h-[24px]  grid place-items-center text-[11px] font-bold ${
-              fullyMapped
-                ? "bg-[#C2410C] text-white"
-                : "bg-[#F3F0E8] text-[#5D6260] border border-[#E4E7EC]"
-            }`}
-          >
-            {sellerDomain[0].toUpperCase()}
-          </span>
-          <span className="font-medium text-[13px] text-[#1A1F1E] tracking-tight">
-            {sellerDomain}
-          </span>
-        </div>
-        <div className="flex-1 h-px bg-[#E4E7EC]" />
-        <div className="flex items-center gap-2 shrink-0 text-[11px] text-[#6A6F6D]">
-          <span>
-            {options.length} option{options.length === 1 ? "" : "s"}
-          </span>
-          {listingCount > 1 && (
-            <>
-              <span className="text-[#CFCABC]">·</span>
-              <span>{listingCount} pages</span>
-            </>
-          )}
-          {mapped > 0 && (
-            <span
-              className={`inline-flex items-center gap-1 px-2 py-[2px] rounded-full text-[10.5px] font-semibold ${
-                fullyMapped
-                  ? "bg-[#C2410C] text-white"
-                  : "bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]"
-              }`}
-            >
-              <Check className="w-2.5 h-2.5" strokeWidth={3} />
-              {mapped}/{options.length} mapped
+    <section className="rounded-[12px] border border-[#E4E7EC] bg-white overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-left transition-colors ${
+          open ? "hover:bg-[#F9FAFB]" : "hover:bg-[#F9FAFB]"
+        }`}
+      >
+        <span
+          className={`w-[26px] h-[26px] rounded-[7px] grid place-items-center text-[11px] font-bold shrink-0 ${
+            fullyMapped
+              ? "bg-[#EA580C] text-white"
+              : mapped > 0
+                ? "bg-[#FFF4ED] text-[#C2410C] border border-[#FED7AA]"
+                : "bg-[#F2F4F7] text-[#475467] border border-[#E4E7EC]"
+          }`}
+        >
+          {sellerDomain[0].toUpperCase()}
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-[13.5px] text-[#101828] tracking-tight">
+              {sellerDomain}
             </span>
-          )}
+            {mapped > 0 && (
+              <span
+                className={`inline-flex items-center gap-1 px-1.5 py-[2px] rounded-full text-[10px] font-semibold ${
+                  fullyMapped
+                    ? "bg-[#EA580C] text-white"
+                    : "bg-[#ECFDF3] text-[#067647] border border-[#ABEFC6]"
+                }`}
+              >
+                <Check className="w-2.5 h-2.5" strokeWidth={3} />
+                {mapped}/{options.length}
+              </span>
+            )}
+          </div>
+          {/* Sub-line: option count · pages · (when collapsed) price range */}
+          <div className="flex items-center gap-1.5 text-[11px] text-[#667085] mt-0.5 flex-wrap">
+            <span className="tnum">
+              {options.length} option{options.length === 1 ? "" : "s"}
+            </span>
+            {listingCount > 1 && (
+              <>
+                <span className="text-[#D0D5DD]">·</span>
+                <span className="tnum">{listingCount} pages</span>
+              </>
+            )}
+            {!open && minAed != null && maxAed != null && (
+              <>
+                <span className="text-[#D0D5DD]">·</span>
+                <span className="tnum">
+                  {minAed === maxAed
+                    ? fmtAED(minAed, "AED")
+                    : `${fmtAED(minAed, "AED")} – ${fmtAED(maxAed, "AED")}`}
+                </span>
+              </>
+            )}
+          </div>
         </div>
-      </div>
-      <div className="space-y-2">
-        {options.map((opt) => (
-          <CompetitorRow
-            key={opt.option_id}
-            option={opt}
-            raynaOptions={raynaOptions}
-            selectedRaynaId={selectedRaynaId}
-            productId={productId}
-            chosenDate={chosenDate}
-            onMap={onMap}
-            onUnmap={onUnmap}
-          />
-        ))}
-      </div>
+        <ChevronDown
+          className={`w-4 h-4 text-[#98A2B3] shrink-0 transition-transform ${open ? "" : "-rotate-90"}`}
+          strokeWidth={2.5}
+        />
+      </button>
+
+      {open && (
+        <div className="border-t border-[#F2F4F7] p-3 space-y-2 bg-[#F9FAFB]/40">
+          {options.map((opt) => (
+            <CompetitorRow
+              key={opt.option_id}
+              option={opt}
+              raynaOptions={raynaOptions}
+              selectedRaynaId={selectedRaynaId}
+              productId={productId}
+              chosenDate={chosenDate}
+              onMap={onMap}
+              onUnmap={onUnmap}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -1776,17 +1839,17 @@ function CompetitorRow({
   const compareRayna = raynaOptions.find((o) => o.id === compareRaynaId);
   const compAED = toAED(option.price, option.currency);
   const raynaAED = toAED(compareRayna?.price ?? null, compareRayna?.currency ?? null);
-  let gap: { pct: number; color: string; bg: string; border: string; label: string; Arrow: typeof ArrowUp } | null = null;
+  let gap: { pct: number; color: string; bg: string; border: string; tone: "match" | "pricier" | "cheaper"; Arrow: typeof ArrowUp } | null = null;
   if (compAED != null && raynaAED != null && raynaAED > 0) {
     const diff = compAED - raynaAED;
     const pct = (diff / raynaAED) * 100;
     if (Math.abs(diff) < 0.5) {
-      gap = { pct, color: "#3F4644", bg: "#F3F0E8", border: "#E4E7EC", label: "match", Arrow: Minus };
+      gap = { pct, color: "#475467", bg: "#F2F4F7", border: "#E4E7EC", tone: "match", Arrow: Minus };
     } else if (diff > 0) {
       // Competitor is more expensive → Rayna wins
-      gap = { pct, color: "#15803D", bg: "#F0FDF4", border: "#BBF7D0", label: "we win", Arrow: ArrowUp };
+      gap = { pct, color: "#067647", bg: "#ECFDF3", border: "#ABEFC6", tone: "pricier", Arrow: ArrowUp };
     } else {
-      gap = { pct, color: "#B91C1C", bg: "#FEF2F2", border: "#FCA5A5", label: "we lose", Arrow: ArrowDown };
+      gap = { pct, color: "#B42318", bg: "#FEF3F2", border: "#FECDCA", tone: "cheaper", Arrow: ArrowDown };
     }
   }
 
@@ -1918,22 +1981,29 @@ function CompetitorRow({
           </div>
           {gap && (
             <span
-              className="inline-flex items-center gap-1 px-2 py-[3px] rounded-full text-[11px] font-semibold border"
+              className="inline-flex items-center gap-1 px-2 py-[3px] rounded-full text-[11.5px] font-semibold border tnum"
               style={{
                 color: gap.color,
                 background: gap.bg,
                 borderColor: gap.border,
               }}
-              title={`Competitor is ${fmtPercent(gap.pct, { sign: true })} vs Rayna AED ${raynaAED?.toFixed(0)}`}
+              title={
+                gap.tone === "match"
+                  ? `Competitor matches your AED ${raynaAED?.toFixed(0)}`
+                  : gap.tone === "cheaper"
+                    ? `Competitor is ${Math.abs(gap.pct).toFixed(1)}% cheaper than your AED ${raynaAED?.toFixed(0)}`
+                    : `Competitor is ${gap.pct.toFixed(1)}% pricier than your AED ${raynaAED?.toFixed(0)}`
+              }
             >
               <gap.Arrow className="w-3 h-3" strokeWidth={3} />
-              <span className="tnum">{fmtPercent(gap.pct, { sign: true })}</span>
-              <span className="opacity-70 font-normal text-[10.5px]">
-                vs your{" "}
-                <span className="tnum font-semibold">
-                  AED {raynaAED != null ? raynaAED.toFixed(0) : "—"}
-                </span>
-              </span>
+              {gap.tone === "match" ? (
+                "match"
+              ) : (
+                <>
+                  {gap.pct > 0 ? "+" : ""}
+                  {gap.pct.toFixed(0)}%
+                </>
+              )}
             </span>
           )}
         </div>
