@@ -137,6 +137,7 @@ export interface CompetitorOptionForMapping {
 
 export interface SellerGroup {
   seller_domain: string;
+  competitor_id: number;
   listing_count: number;
   options: CompetitorOptionForMapping[];
 }

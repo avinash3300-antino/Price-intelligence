@@ -139,15 +139,56 @@ class _TextExtractor(HTMLParser):
         return "\n".join(lines)
 
 
+import re
+
+
+# Modern OTAs (GetYourGuide, Klook, Viator, Airbnb, Booking) SSR their pages
+# with Next.js / Nuxt. The full variant catalog — including per-add-on prices
+# that only render post-click — is almost always embedded verbatim as JSON in
+# the initial HTML, inside one of these script tags. The visible-text extractor
+# strips them, so we pull them out separately and append to what Claude sees.
+_EMBEDDED_JSON_SCRIPTS = re.compile(
+    r'<script\b[^>]*?(?:id="(?:__NEXT_DATA__|__NUXT__|__APOLLO_STATE__|serverApp-state|initial-state)"|type="application/ld\+json")[^>]*>(.*?)</script>',
+    re.IGNORECASE | re.DOTALL,
+)
+_EMBEDDED_JSON_CAP = 60_000  # per blob; enough for a full GYG catalog
+
+
+def _extract_embedded_json(html: str) -> str:
+    """Return concatenated JSON blobs found in known SSR-init script tags.
+    Empty string if none present. Each blob is trimmed to _EMBEDDED_JSON_CAP
+    so a page with a bloated hydration payload can't torch the Claude prompt.
+    """
+    out: list[str] = []
+    for m in _EMBEDDED_JSON_SCRIPTS.finditer(html):
+        raw = m.group(1).strip()
+        if not raw or (not raw.startswith("{") and not raw.startswith("[")):
+            continue
+        if len(raw) > _EMBEDDED_JSON_CAP:
+            raw = raw[:_EMBEDDED_JSON_CAP] + "…(truncated)"
+        out.append(raw)
+    return "\n\n---\n\n".join(out)
+
+
 def html_to_text(html: str) -> tuple[str, str | None]:
-    """Return (plain_text, title). Stdlib only."""
+    """Return (plain_text, title). Stdlib only.
+
+    Also appends any embedded-JSON blobs (__NEXT_DATA__, JSON-LD, etc.) at
+    the end. On OTA sites the visible-text region often lacks per-variant
+    prices — those live in the SSR JSON. Giving Claude both makes the
+    extraction robust.
+    """
     p = _TextExtractor()
     try:
         p.feed(html)
     except Exception:  # noqa: BLE001
         # Malformed HTML — return whatever we accumulated
         pass
-    return p.text(), p.title
+    text = p.text()
+    embedded = _extract_embedded_json(html)
+    if embedded:
+        text = f"{text}\n\n===== EMBEDDED PAGE STATE (JSON) =====\n{embedded}"
+    return text, p.title
 
 
 # ---------- Free fetch ----------

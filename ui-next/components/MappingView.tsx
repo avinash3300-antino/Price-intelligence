@@ -19,6 +19,7 @@ import {
   Minus,
   Plus,
   Search,
+  Trash2,
   X,
 } from "lucide-react";
 import { fmtMoney, fmtBasis, fmtAED, toAED } from "@/lib/format";
@@ -1141,7 +1142,23 @@ function ComparePanel({
     raynaName: string;
     sellerDomain: string;
   };
-  const [pending, setPending] = useState<PendingMap | PendingUnmap | null>(null);
+  type PendingDeleteOption = {
+    kind: "deleteOption";
+    optionId: number;
+    compName: string;
+    sellerDomain: string;
+    hasMapping: boolean;
+  };
+  type PendingDeleteCompetitor = {
+    kind: "deleteCompetitor";
+    competitorId: number;
+    sellerDomain: string;
+    optionCount: number;
+    mappedCount: number;
+  };
+  const [pending, setPending] = useState<
+    PendingMap | PendingUnmap | PendingDeleteOption | PendingDeleteCompetitor | null
+  >(null);
   const [pendingBusy, setPendingBusy] = useState(false);
 
   // build the workspace URL with the chosen date so the backend swaps in
@@ -1310,6 +1327,101 @@ function ComparePanel({
     }
   }
 
+  function deleteOption(optionId: number): Promise<void> {
+    // Resolve display info from the loaded workspace for the confirm dialog.
+    let compName = "this competitor option";
+    let sellerDomain = "";
+    let hasMapping = false;
+    if (workspace) {
+      for (const s of workspace.sellers) {
+        const c = s.options.find((o) => o.option_id === optionId);
+        if (c) {
+          compName = c.name;
+          sellerDomain = s.seller_domain;
+          hasMapping = c.mapping != null;
+          break;
+        }
+      }
+    }
+    setPending({ kind: "deleteOption", optionId, compName, sellerDomain, hasMapping });
+    return Promise.resolve();
+  }
+
+  function deleteCompetitor(
+    competitorId: number,
+    sellerDomain: string,
+  ): Promise<void> {
+    let optionCount = 0;
+    let mappedCount = 0;
+    if (workspace) {
+      const s = workspace.sellers.find((s) => s.competitor_id === competitorId);
+      if (s) {
+        optionCount = s.options.length;
+        mappedCount = s.options.filter((o) => o.mapping != null).length;
+      }
+    }
+    setPending({
+      kind: "deleteCompetitor",
+      competitorId,
+      sellerDomain,
+      optionCount,
+      mappedCount,
+    });
+    return Promise.resolve();
+  }
+
+  async function runPendingDeleteOption(p: PendingDeleteOption) {
+    setPendingBusy(true);
+    try {
+      const r = await fetch(
+        `${API_BASE_PUBLIC}/api/competitor-options/${p.optionId}`,
+        { method: "DELETE" },
+      );
+      if (!r.ok && r.status !== 204) {
+        let detail = `Delete failed (${r.status})`;
+        try {
+          const body = await r.json();
+          if (body && typeof body.detail === "string") detail = body.detail;
+        } catch {
+          /* not JSON */
+        }
+        toast.error(detail);
+        return;
+      }
+      toast.success("Competitor option deleted");
+      setPending(null);
+      refresh();
+    } finally {
+      setPendingBusy(false);
+    }
+  }
+
+  async function runPendingDeleteCompetitor(p: PendingDeleteCompetitor) {
+    setPendingBusy(true);
+    try {
+      const r = await fetch(
+        `${API_BASE_PUBLIC}/api/competitors/${p.competitorId}`,
+        { method: "DELETE" },
+      );
+      if (!r.ok && r.status !== 204) {
+        let detail = `Delete failed (${r.status})`;
+        try {
+          const body = await r.json();
+          if (body && typeof body.detail === "string") detail = body.detail;
+        } catch {
+          /* not JSON */
+        }
+        toast.error(detail);
+        return;
+      }
+      toast.success(`${p.sellerDomain} removed`);
+      setPending(null);
+      refresh();
+    } finally {
+      setPendingBusy(false);
+    }
+  }
+
   return (
     <div className="p-5">
       {loading && !workspace ? (
@@ -1328,6 +1440,8 @@ function ComparePanel({
           chosenDate={chosenDate}
           onMap={mapOption}
           onUnmap={unmap}
+          onDeleteOption={deleteOption}
+          onDeleteCompetitor={deleteCompetitor}
           onRefresh={refresh}
         />
       ) : null}
@@ -1413,6 +1527,85 @@ function ComparePanel({
         onConfirm={() => pending?.kind === "unmap" && runPendingUnmap(pending)}
         onCancel={() => !pendingBusy && setPending(null)}
       />
+
+      <ConfirmDialog
+        open={pending?.kind === "deleteOption"}
+        title="Delete this competitor option?"
+        body={
+          pending?.kind === "deleteOption" ? (
+            <div className="space-y-2">
+              <div>
+                Removes this competitor option from the workspace.
+                {pending.hasMapping ? (
+                  <>
+                    {" "}
+                    The current mapping is <strong>also removed</strong>.
+                  </>
+                ) : (
+                  " No mapping is affected."
+                )}
+                {" "}
+                You can re-scrape it later via <strong>Add by URL</strong>.
+              </div>
+              <div className="rounded-[8px] bg-[#F9FAFB] border border-[#E4E7EC] px-3 py-2 space-y-1">
+                <div>
+                  <span className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-[#98A2B3]">
+                    Competitor
+                    {pending.sellerDomain && (
+                      <span className="ml-1 font-mono normal-case text-[#98A2B3]">
+                        · {pending.sellerDomain}
+                      </span>
+                    )}
+                  </span>
+                  <div className="text-[13px] font-semibold text-[#101828] leading-snug">
+                    {pending.compName}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null
+        }
+        confirmLabel="Delete option"
+        danger
+        busy={pendingBusy}
+        onConfirm={() =>
+          pending?.kind === "deleteOption" && runPendingDeleteOption(pending)
+        }
+        onCancel={() => !pendingBusy && setPending(null)}
+      />
+
+      <ConfirmDialog
+        open={pending?.kind === "deleteCompetitor"}
+        title="Remove this seller entirely?"
+        body={
+          pending?.kind === "deleteCompetitor" ? (
+            <div className="space-y-2">
+              <div>
+                This deletes <span className="font-mono font-semibold">{pending.sellerDomain}</span>{" "}
+                for this Rayna product — all scraped listings, all{" "}
+                <strong>{pending.optionCount}</strong> option
+                {pending.optionCount === 1 ? "" : "s"}
+                {pending.mappedCount > 0 && (
+                  <>
+                    , and the <strong>{pending.mappedCount}</strong> existing
+                    mapping
+                    {pending.mappedCount === 1 ? "" : "s"}
+                  </>
+                )}
+                . Cannot be undone. You can re-add the seller later via{" "}
+                <strong>Add by URL</strong>.
+              </div>
+            </div>
+          ) : null
+        }
+        confirmLabel="Delete seller"
+        danger
+        busy={pendingBusy}
+        onConfirm={() =>
+          pending?.kind === "deleteCompetitor" && runPendingDeleteCompetitor(pending)
+        }
+        onCancel={() => !pendingBusy && setPending(null)}
+      />
     </div>
   );
 }
@@ -1428,6 +1621,8 @@ function WorkspacePanel({
   chosenDate,
   onMap,
   onUnmap,
+  onDeleteOption,
+  onDeleteCompetitor,
   onRefresh,
 }: {
   workspace: ProductMappingPayload;
@@ -1435,6 +1630,8 @@ function WorkspacePanel({
   chosenDate: string;
   onMap: (compId: number, raynaId: number) => Promise<void>;
   onUnmap: (mappingId: number) => Promise<void>;
+  onDeleteOption: (optionId: number) => Promise<void>;
+  onDeleteCompetitor: (competitorId: number, sellerDomain: string) => Promise<void>;
   onRefresh: () => void;
 }) {
   const { product, rayna_options, sellers, total_competitor_options } = workspace;
@@ -1567,6 +1764,7 @@ function WorkspacePanel({
                   <SellerCard
                     key={seller.seller_domain}
                     sellerDomain={seller.seller_domain}
+                    competitorId={seller.competitor_id}
                     listingCount={seller.listing_count}
                     options={seller.options}
                     raynaOptions={rayna_options}
@@ -1575,6 +1773,8 @@ function WorkspacePanel({
                     chosenDate={chosenDate}
                     onMap={onMap}
                     onUnmap={onUnmap}
+                    onDeleteOption={onDeleteOption}
+                    onDeleteCompetitor={onDeleteCompetitor}
                   />
                 ))}
               </div>
@@ -1658,6 +1858,7 @@ function RaynaOptionCard({
 
 function SellerCard({
   sellerDomain,
+  competitorId,
   listingCount,
   options,
   raynaOptions,
@@ -1666,8 +1867,11 @@ function SellerCard({
   chosenDate,
   onMap,
   onUnmap,
+  onDeleteOption,
+  onDeleteCompetitor,
 }: {
   sellerDomain: string;
+  competitorId: number;
   listingCount: number;
   options: CompetitorOptionForMapping[];
   raynaOptions: RaynaOption[];
@@ -1676,6 +1880,8 @@ function SellerCard({
   chosenDate: string;
   onMap: (compId: number, raynaId: number) => Promise<void>;
   onUnmap: (mappingId: number) => Promise<void>;
+  onDeleteOption: (optionId: number) => Promise<void>;
+  onDeleteCompetitor: (competitorId: number, sellerDomain: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -1691,71 +1897,80 @@ function SellerCard({
 
   return (
     <section className="rounded-[12px] border border-[#E4E7EC] bg-white overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-left transition-colors ${
-          open ? "hover:bg-[#F9FAFB]" : "hover:bg-[#F9FAFB]"
-        }`}
-      >
-        <span
-          className={`w-[26px] h-[26px] rounded-[7px] grid place-items-center text-[11px] font-bold shrink-0 ${
-            fullyMapped
-              ? "bg-[#EA580C] text-white"
-              : mapped > 0
-                ? "bg-[#FFF4ED] text-[#C2410C] border border-[#FED7AA]"
-                : "bg-[#F2F4F7] text-[#475467] border border-[#E4E7EC]"
-          }`}
+      <div className="w-full flex items-center gap-1 px-3.5 py-2.5 hover:bg-[#F9FAFB] transition-colors">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="flex-1 flex items-center gap-3 text-left min-w-0"
         >
-          {sellerDomain[0].toUpperCase()}
-        </span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-[13.5px] text-[#101828] tracking-tight">
-              {sellerDomain}
-            </span>
-            {mapped > 0 && (
-              <span
-                className={`inline-flex items-center gap-1 px-1.5 py-[2px] rounded-full text-[10px] font-semibold ${
-                  fullyMapped
-                    ? "bg-[#EA580C] text-white"
-                    : "bg-[#ECFDF3] text-[#067647] border border-[#ABEFC6]"
-                }`}
-              >
-                <Check className="w-2.5 h-2.5" strokeWidth={3} />
-                {mapped}/{options.length}
+          <span
+            className={`w-[26px] h-[26px] rounded-[7px] grid place-items-center text-[11px] font-bold shrink-0 ${
+              fullyMapped
+                ? "bg-[#EA580C] text-white"
+                : mapped > 0
+                  ? "bg-[#FFF4ED] text-[#C2410C] border border-[#FED7AA]"
+                  : "bg-[#F2F4F7] text-[#475467] border border-[#E4E7EC]"
+            }`}
+          >
+            {sellerDomain[0].toUpperCase()}
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold text-[13.5px] text-[#101828] tracking-tight">
+                {sellerDomain}
               </span>
-            )}
-          </div>
-          {/* Sub-line: option count · pages · (when collapsed) price range */}
-          <div className="flex items-center gap-1.5 text-[11px] text-[#667085] mt-0.5 flex-wrap">
-            <span className="tnum">
-              {options.length} option{options.length === 1 ? "" : "s"}
-            </span>
-            {listingCount > 1 && (
-              <>
-                <span className="text-[#D0D5DD]">·</span>
-                <span className="tnum">{listingCount} pages</span>
-              </>
-            )}
-            {!open && minAed != null && maxAed != null && (
-              <>
-                <span className="text-[#D0D5DD]">·</span>
-                <span className="tnum">
-                  {minAed === maxAed
-                    ? fmtAED(minAed, "AED")
-                    : `${fmtAED(minAed, "AED")} – ${fmtAED(maxAed, "AED")}`}
+              {mapped > 0 && (
+                <span
+                  className={`inline-flex items-center gap-1 px-1.5 py-[2px] rounded-full text-[10px] font-semibold ${
+                    fullyMapped
+                      ? "bg-[#EA580C] text-white"
+                      : "bg-[#ECFDF3] text-[#067647] border border-[#ABEFC6]"
+                  }`}
+                >
+                  <Check className="w-2.5 h-2.5" strokeWidth={3} />
+                  {mapped}/{options.length}
                 </span>
-              </>
-            )}
+              )}
+            </div>
+            {/* Sub-line: option count · pages · (when collapsed) price range */}
+            <div className="flex items-center gap-1.5 text-[11px] text-[#667085] mt-0.5 flex-wrap">
+              <span className="tnum">
+                {options.length} option{options.length === 1 ? "" : "s"}
+              </span>
+              {listingCount > 1 && (
+                <>
+                  <span className="text-[#D0D5DD]">·</span>
+                  <span className="tnum">{listingCount} pages</span>
+                </>
+              )}
+              {!open && minAed != null && maxAed != null && (
+                <>
+                  <span className="text-[#D0D5DD]">·</span>
+                  <span className="tnum">
+                    {minAed === maxAed
+                      ? fmtAED(minAed, "AED")
+                      : `${fmtAED(minAed, "AED")} – ${fmtAED(maxAed, "AED")}`}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-        <ChevronDown
-          className={`w-4 h-4 text-[#98A2B3] shrink-0 transition-transform ${open ? "" : "-rotate-90"}`}
-          strokeWidth={2.5}
-        />
-      </button>
+          <ChevronDown
+            className={`w-4 h-4 text-[#98A2B3] shrink-0 transition-transform ${open ? "" : "-rotate-90"}`}
+            strokeWidth={2.5}
+          />
+        </button>
+        <button
+          type="button"
+          onClick={() => onDeleteCompetitor(competitorId, sellerDomain)}
+          title={`Remove ${sellerDomain} entirely`}
+          aria-label={`Remove ${sellerDomain}`}
+          className="shrink-0 p-1.5 rounded-[7px] text-[#98A2B3] hover:bg-[#FEF3F2] hover:text-[#B42318] transition-colors"
+        >
+          <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
+        </button>
+      </div>
 
       {open && (
         <div className="border-t border-[#F2F4F7] p-3 space-y-2 bg-[#F9FAFB]/40">
@@ -1769,6 +1984,7 @@ function SellerCard({
               chosenDate={chosenDate}
               onMap={onMap}
               onUnmap={onUnmap}
+              onDeleteOption={onDeleteOption}
             />
           ))}
         </div>
@@ -1785,6 +2001,7 @@ function CompetitorRow({
   chosenDate,
   onMap,
   onUnmap,
+  onDeleteOption,
 }: {
   option: CompetitorOptionForMapping;
   raynaOptions: RaynaOption[];
@@ -1793,6 +2010,7 @@ function CompetitorRow({
   chosenDate: string;
   onMap: (compId: number, raynaId: number) => Promise<void>;
   onUnmap: (mappingId: number) => Promise<void>;
+  onDeleteOption: (optionId: number) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -1916,6 +2134,15 @@ function CompetitorRow({
                 Compare
               </a>
             )}
+            <button
+              type="button"
+              onClick={() => onDeleteOption(option.option_id)}
+              title="Delete this competitor option"
+              aria-label="Delete this competitor option"
+              className="shrink-0 p-2 rounded-[7px] text-[#98A2B3] hover:bg-[#FEF3F2] hover:text-[#B42318] transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
+            </button>
             {mapped ? (
               <button
                 type="button"

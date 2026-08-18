@@ -154,6 +154,7 @@ class CompetitorOptionForMapping(BaseModel):
 
 class SellerGroup(BaseModel):
     seller_domain: str
+    competitor_id: int
     listing_count: int
     options: list[CompetitorOptionForMapping]
 
@@ -679,8 +680,8 @@ def mapping_workspace(
         # all competitor options for this product, with manual-mapping state
         rows = c.execute(
             """SELECT o.id AS option_id, o.name, o.pricing_basis, o.price, o.currency,
-                      o.fingerprint_json, c.seller_domain, cl.id AS listing_id,
-                      cl.listing_url,
+                      o.fingerprint_json, c.id AS competitor_id, c.seller_domain,
+                      cl.id AS listing_id, cl.listing_url,
                       m.id AS mapping_id, m.rayna_option_id, m.is_manual
                FROM options o
                JOIN competitor_listings cl ON cl.id = o.competitor_listing_id
@@ -696,7 +697,11 @@ def mapping_workspace(
         for r in rows:
             sd = r["seller_domain"]
             if sd not in sellers_dict:
-                sellers_dict[sd] = {"listing_ids": set(), "options": []}
+                sellers_dict[sd] = {
+                    "competitor_id": r["competitor_id"],
+                    "listing_ids": set(),
+                    "options": [],
+                }
 
             fp = json.loads(r["fingerprint_json"] or "{}")
             mapping = None
@@ -736,6 +741,7 @@ def mapping_workspace(
         sellers = [
             SellerGroup(
                 seller_domain=sd,
+                competitor_id=info["competitor_id"],
                 listing_count=len(info["listing_ids"]),
                 options=info["options"],
             )
@@ -1162,6 +1168,98 @@ def delete_mapping(mapping_id: int):
                 detail="Refusing to delete an automated (Claude) mapping; only is_manual=1 rows can be deleted via this endpoint.",
             )
         c.execute("DELETE FROM mappings WHERE id=?", (mapping_id,))
+        c.commit()
+        return None
+
+
+@app.delete("/api/competitor-options/{option_id}", status_code=204)
+def delete_competitor_option(option_id: int):
+    """Remove a single competitor option row. Cascades:
+      1. Any mappings that reference it (usually 0 or 1 rows).
+      2. The option row itself.
+      3. The parent listing IF it has no options left AND no other listings
+         for the same competitor point at it (keeps the listings table tidy).
+    The parent `competitors` row is kept — a seller can still exist for the
+    product with zero listings if the reviewer plans to add fresh URLs.
+    """
+    with conn() as c:
+        row = c.execute(
+            """SELECT o.id, o.competitor_listing_id, o.source
+               FROM options o WHERE o.id=?""",
+            (option_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Competitor option not found")
+        if row["source"] != "competitor":
+            raise HTTPException(
+                status_code=400,
+                detail="This endpoint only deletes competitor options; Rayna options are catalog data.",
+            )
+        listing_id = row["competitor_listing_id"]
+
+        c.execute("DELETE FROM mappings WHERE competitor_option_id=?", (option_id,))
+        c.execute("DELETE FROM price_observations WHERE option_id=?", (option_id,))
+        c.execute("DELETE FROM options WHERE id=?", (option_id,))
+
+        remaining = c.execute(
+            "SELECT COUNT(*) FROM options WHERE competitor_listing_id=?",
+            (listing_id,),
+        ).fetchone()[0]
+        if remaining == 0:
+            c.execute("DELETE FROM competitor_listings WHERE id=?", (listing_id,))
+
+        c.commit()
+        return None
+
+
+@app.delete("/api/competitors/{competitor_id}", status_code=204)
+def delete_competitor(competitor_id: int):
+    """Wipe an entire seller for one Rayna product. Cascades everything:
+    mappings → options → listings → the competitors row itself.
+    Use when a whole seller was added by mistake or is no longer relevant.
+    Reviewer can re-add later via Add-by-URL."""
+    with conn() as c:
+        row = c.execute(
+            "SELECT id FROM competitors WHERE id=?", (competitor_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Competitor not found")
+
+        # 1. mappings whose competitor_option belongs to this seller
+        c.execute(
+            """DELETE FROM mappings
+               WHERE competitor_option_id IN (
+                 SELECT o.id FROM options o
+                 JOIN competitor_listings cl ON cl.id = o.competitor_listing_id
+                 WHERE cl.competitor_id = ?
+               )""",
+            (competitor_id,),
+        )
+        # 2. per-date observations for those options
+        c.execute(
+            """DELETE FROM price_observations
+               WHERE option_id IN (
+                 SELECT o.id FROM options o
+                 JOIN competitor_listings cl ON cl.id = o.competitor_listing_id
+                 WHERE cl.competitor_id = ?
+               )""",
+            (competitor_id,),
+        )
+        # 3. options
+        c.execute(
+            """DELETE FROM options
+               WHERE competitor_listing_id IN (
+                 SELECT id FROM competitor_listings WHERE competitor_id = ?
+               )""",
+            (competitor_id,),
+        )
+        # 4. listings
+        c.execute(
+            "DELETE FROM competitor_listings WHERE competitor_id=?",
+            (competitor_id,),
+        )
+        # 5. the seller row itself
+        c.execute("DELETE FROM competitors WHERE id=?", (competitor_id,))
         c.commit()
         return None
 
