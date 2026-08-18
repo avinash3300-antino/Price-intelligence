@@ -229,10 +229,31 @@ def html_to_text(html: str) -> tuple[str, str | None]:
             html,
         )
     )
+    # Deeper diagnostic: fingerprint the FIRST 80 chars of every <script> tag
+    # so we can see when a site uses a state pattern we don't recognise
+    # (Klook-style var pageProps = ..., self.__next_f.push, etc.). Only the
+    # non-empty distinct fingerprints, capped at 12, to keep the log small.
+    script_fps: list[str] = []
+    seen_fps: set[str] = set()
+    for m in re.finditer(r"<script\b([^>]*)>(.*?)</script>", html, re.DOTALL | re.IGNORECASE):
+        attrs = (m.group(1) or "").strip()[:80].replace("\n", " ")
+        body = (m.group(2) or "").strip()
+        if not body or len(body) < 80:
+            continue
+        head = body[:80].replace("\n", "\\n")
+        fp = f"[{attrs}] {head!r}"
+        if fp in seen_fps:
+            continue
+        seen_fps.add(fp)
+        script_fps.append(fp)
+        if len(script_fps) >= 12:
+            break
     print(
         f"[html_to_text] visible={len(text)} embedded={len(embedded)} "
         f"raw={len(html)} seen_state_markers={sorted({n for pair in seen_names for n in pair if n})[:15]}"
     )
+    for fp in script_fps:
+        print(f"[html_to_text] script_fp: {fp}")
     if embedded:
         text = f"{text}\n\n===== EMBEDDED PAGE STATE (JSON) =====\n{embedded}"
     return text, p.title
