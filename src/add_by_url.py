@@ -220,6 +220,19 @@ def html_to_text(html: str) -> tuple[str, str | None]:
         pass
     text = p.text()
     embedded = _extract_embedded_json(html)
+    # Diagnostic: log what pattern names appear in the raw HTML so we can tell
+    # when a site ships state under a name we don't cover. Cheap regex, ~free.
+    seen_names = set(
+        re.findall(
+            r"(?:id=[\"'](__[A-Z_]+__|[a-zA-Z_-]+-state)[\"']"
+            r"|window\.(__[A-Za-z_]+__|__[a-zA-Z_]+)\s*=)",
+            html,
+        )
+    )
+    print(
+        f"[html_to_text] visible={len(text)} embedded={len(embedded)} "
+        f"raw={len(html)} seen_state_markers={sorted({n for pair in seen_names for n in pair if n})[:15]}"
+    )
     if embedded:
         text = f"{text}\n\n===== EMBEDDED PAGE STATE (JSON) =====\n{embedded}"
     return text, p.title
