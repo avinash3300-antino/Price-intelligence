@@ -65,6 +65,13 @@ _JS_HEAVY_DOMAINS: set[str] = {
     "headout.com",
     "civitatis.com",
     "tripadvisor.com",
+    # OTAs that also expose activity/experience listings behind
+    # aggressive client-side rendering + Cloudflare.
+    "agoda.com",
+    "booking.com",
+    "expedia.com",
+    "airbnb.com",
+    "kayak.com",
 }
 
 
@@ -147,23 +154,50 @@ import re
 # that only render post-click — is almost always embedded verbatim as JSON in
 # the initial HTML, inside one of these script tags. The visible-text extractor
 # strips them, so we pull them out separately and append to what Claude sees.
-_EMBEDDED_JSON_SCRIPTS = re.compile(
-    r'<script\b[^>]*?(?:id="(?:__NEXT_DATA__|__NUXT__|__APOLLO_STATE__|serverApp-state|initial-state)"|type="application/ld\+json")[^>]*>(.*?)</script>',
+# Named-attribute matches (Next.js, Nuxt, Apollo, common Vue/React patterns)
+_EMBEDDED_JSON_SCRIPTS_TAGGED = re.compile(
+    r'<script\b[^>]*?(?:'
+    r'id="(?:__NEXT_DATA__|__NUXT__|__APOLLO_STATE__|__INITIAL_STATE__|__PRELOADED_STATE__|serverApp-state|initial-state|__NEXT_F|app-data)"'
+    r'|type="application/ld\+json"'
+    r')[^>]*>(.*?)</script>',
     re.IGNORECASE | re.DOTALL,
 )
-_EMBEDDED_JSON_CAP = 60_000  # per blob; enough for a full GYG catalog
+
+# Inline `window.__X__ = { ... };` assignments — Agoda, Booking, some older
+# React apps still ship state this way instead of a labelled <script> tag.
+_INLINE_STATE_ASSIGN = re.compile(
+    r'\bwindow\.(?:__INITIAL_STATE__|__PRELOADED_STATE__|__APOLLO_STATE__|__NUXT__|__NEXT_DATA__|__REDUX_STATE__|__STATE__|__DATA__|__CONFIG__)\s*=\s*(\{.*?\})\s*[;<]',
+    re.IGNORECASE | re.DOTALL,
+)
+
+_EMBEDDED_JSON_CAP = 60_000  # per blob; enough for a full GYG/Agoda catalog
 
 
 def _extract_embedded_json(html: str) -> str:
-    """Return concatenated JSON blobs found in known SSR-init script tags.
-    Empty string if none present. Each blob is trimmed to _EMBEDDED_JSON_CAP
-    so a page with a bloated hydration payload can't torch the Claude prompt.
+    """Return concatenated JSON blobs found in the raw HTML — from either
+    labelled <script id="..."> tags or inline window.__X__ = {...} assigns.
+    Empty string if none present. Each blob trimmed to _EMBEDDED_JSON_CAP so
+    a page with bloated hydration can't torch the Claude prompt.
     """
+    seen: set[str] = set()
     out: list[str] = []
-    for m in _EMBEDDED_JSON_SCRIPTS.finditer(html):
+    for m in _EMBEDDED_JSON_SCRIPTS_TAGGED.finditer(html):
         raw = m.group(1).strip()
         if not raw or (not raw.startswith("{") and not raw.startswith("[")):
             continue
+        key = raw[:120]
+        if key in seen:
+            continue
+        seen.add(key)
+        if len(raw) > _EMBEDDED_JSON_CAP:
+            raw = raw[:_EMBEDDED_JSON_CAP] + "…(truncated)"
+        out.append(raw)
+    for m in _INLINE_STATE_ASSIGN.finditer(html):
+        raw = m.group(1).strip()
+        key = raw[:120]
+        if key in seen:
+            continue
+        seen.add(key)
         if len(raw) > _EMBEDDED_JSON_CAP:
             raw = raw[:_EMBEDDED_JSON_CAP] + "…(truncated)"
         out.append(raw)
