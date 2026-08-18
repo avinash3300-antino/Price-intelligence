@@ -415,7 +415,11 @@ def _fetch_with_firecrawl(url: str) -> tuple[int, str] | None:
             },
             json={
                 "url": target,
-                "formats": ["markdown"],
+                # Ask for markdown (Claude reads it as the visible page) AND
+                # rawHtml (we scrape SSR __NEXT_DATA__ / JSON-LD out of it so
+                # per-variant prices that GYG/Klook hydrate on-click still
+                # reach the extractor).
+                "formats": ["markdown", "rawHtml"],
                 # OTAs (Klook, GYG) put the package picker in a sidebar or
                 # slide-out modal that Firecrawl's onlyMainContent heuristic
                 # strips out. Keep the full page — Claude filters the noise.
@@ -446,6 +450,7 @@ def _fetch_with_firecrawl(url: str) -> tuple[int, str] | None:
         return None
     data = payload.get("data") or {}
     md = data.get("markdown") or ""
+    raw_html = data.get("rawHtml") or ""
     if len(md) < MIN_CONTENT_CHARS:
         # Firecrawl returned success but with too-thin content — treat as
         # a soft failure so the caller can surface the paste fallback.
@@ -454,8 +459,16 @@ def _fetch_with_firecrawl(url: str) -> tuple[int, str] | None:
     # html_to_text() expects HTML; wrap the markdown in a <pre> so its
     # parser preserves whitespace and treats it as one text block. The
     # extractor Claude sees this as the page's readable content — same
-    # shape as the httpx/playwright paths.
-    wrapped = f"<html><head></head><body><pre>{md}</pre></body></html>"
+    # shape as the httpx/playwright paths. We also embed the raw HTML
+    # after the pre-block so _extract_embedded_json can pull SSR JSON
+    # (__NEXT_DATA__, JSON-LD) out of it — that's where GYG/Klook keep
+    # per-variant prices that only render on-click in the browser.
+    if raw_html:
+        wrapped = (
+            f"<html><head></head><body><pre>{md}</pre>{raw_html}</body></html>"
+        )
+    else:
+        wrapped = f"<html><head></head><body><pre>{md}</pre></body></html>"
     return 200, wrapped
 
 
