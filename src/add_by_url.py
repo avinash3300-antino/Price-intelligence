@@ -46,6 +46,45 @@ def normalize_seller_domain(url: str) -> str:
     return host
 
 
+# ---------- JS-heavy OTA domains ----------
+#
+# These sellers render per-variant prices client-side (React/Vue hydration).
+# httpx/curl-cffi return a rich-looking HTML shell that passes the thin-body
+# check, but the option-level prices aren't in the raw markup — Claude ends
+# up extracting the option names correctly but leaves price=null for the
+# add-on variants.
+#
+# For these hosts we skip the fast fetchers entirely and jump to the
+# JS-rendering path (Playwright → Firecrawl).
+_JS_HEAVY_DOMAINS: set[str] = {
+    "getyourguide.com",
+    "klook.com",
+    "viator.com",
+    "tiqets.com",
+    "musement.com",
+    "headout.com",
+    "civitatis.com",
+    "tripadvisor.com",
+}
+
+
+def _needs_js_render(url: str) -> bool:
+    """True when the URL's host (or any parent domain) is on the JS-heavy list."""
+    host = (urlparse(url).hostname or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    if not host:
+        return False
+    # Match on the eTLD+1 by walking parent domains — catches
+    # `ticket.getyourguide.com` etc.
+    parts = host.split(".")
+    for i in range(len(parts) - 1):
+        candidate = ".".join(parts[i:])
+        if candidate in _JS_HEAVY_DOMAINS:
+            return True
+    return False
+
+
 # ---------- Stdlib HTML -> plain text ----------
 
 
@@ -399,18 +438,25 @@ def fetch_url_as_text(url: str) -> tuple[str, str | None]:
     body: str = ""
     fetch_err: Exception | None = None
 
-    # Stage 1: httpx
-    try:
-        status, body = _fetch_with_httpx(url)
-    except httpx.HTTPError as e:
-        fetch_err = e
+    # For JS-heavy OTAs (GYG/Klook/Viator/…) the raw HTML has option names
+    # but not per-variant prices — hydration happens in the browser. Skip
+    # stages 1-2 and go straight to the JS-rendering path.
+    js_heavy = _needs_js_render(url)
 
-    needs_fallback = (
+    if not js_heavy:
+        # Stage 1: httpx
+        try:
+            status, body = _fetch_with_httpx(url)
+        except httpx.HTTPError as e:
+            fetch_err = e
+
+    needs_fallback = js_heavy or (
         fetch_err is not None or status >= 400 or _is_thin_body(body)
     )
 
     # Stage 2: curl-cffi (Chrome-impersonated TLS)
-    if needs_fallback:
+    # Skipped for JS-heavy hosts since it also returns un-hydrated HTML.
+    if needs_fallback and not js_heavy:
         try:
             fallback = _fetch_with_curl_cffi(url)
         except Exception as e:  # noqa: BLE001
