@@ -155,9 +155,11 @@ import re
 # the initial HTML, inside one of these script tags. The visible-text extractor
 # strips them, so we pull them out separately and append to what Claude sees.
 # Named-attribute matches (Next.js, Nuxt, Apollo, common Vue/React patterns)
+# plus __captured_xhr__ blobs that _fetch_with_playwright injects when it
+# intercepts JSON API responses.
 _EMBEDDED_JSON_SCRIPTS_TAGGED = re.compile(
     r'<script\b[^>]*?(?:'
-    r'id="(?:__NEXT_DATA__|__NUXT__|__APOLLO_STATE__|__INITIAL_STATE__|__PRELOADED_STATE__|serverApp-state|initial-state|__NEXT_F|app-data)"'
+    r'id="(?:__NEXT_DATA__|__NUXT__|__APOLLO_STATE__|__INITIAL_STATE__|__PRELOADED_STATE__|serverApp-state|initial-state|__NEXT_F|app-data|__captured_xhr__)"'
     r'|type="application/ld\+json"'
     r')[^>]*>(.*?)</script>',
     re.IGNORECASE | re.DOTALL,
@@ -340,14 +342,58 @@ def _fetch_with_playwright(url: str) -> tuple[int, str] | None:
     paste-text textarea fallback.
 
     Wait strategy: navigate, wait for `domcontentloaded`, then poll for
-    real content (body text length > 500 chars). Cloudflare's challenge
-    page has almost no visible text, so this filters challenge pages out
-    without needing to detect the specific challenge markup.
+    real content (body text length > 500 chars). Cloudflare challenge
+    pages have almost no visible text, so this filters challenge pages
+    out without needing to detect the specific challenge markup.
+
+    Also intercepts every JSON XHR the page makes to fetch its own
+    variant catalog and appends those responses as <script id="__captured_xhr__">
+    blocks so the downstream JSON extractor can hand them to Claude.
+    That's how we get per-variant prices on OTAs (GYG/Klook/Viator/etc.)
+    that only render add-on prices after a user click.
     """
     try:
         from playwright.sync_api import sync_playwright  # type: ignore
     except ImportError:
         return None
+
+    # Capture JSON API responses the page loads. This is how we get
+    # per-variant prices on OTAs — every serious OTA fetches its option
+    # catalog via an XHR/fetch that returns structured JSON, even if that
+    # JSON only renders on-click.
+    captured_apis: list[tuple[str, str]] = []
+    captured_total = 0
+    CAPTURE_MAX_BODIES = 25
+    CAPTURE_MAX_TOTAL = 400_000  # combined cap so we don't torch Claude's prompt
+    CAPTURE_SKIP_HOSTS = (
+        "google-analytics", "googletagmanager", "gtag", "doubleclick",
+        "facebook.com/tr", "sentry.io", "logrocket", "segment.io",
+        "amplitude.com", "hotjar", "criteo", "adnxs", "bat.bing",
+        "clarity.ms", "newrelic", "datadog", "cloudflareinsights",
+        "/beacon", "/collect", "/pixel",
+    )
+
+    def _on_response(response) -> None:  # noqa: ANN001
+        nonlocal captured_total
+        if len(captured_apis) >= CAPTURE_MAX_BODIES:
+            return
+        try:
+            ctype = (response.headers.get("content-type") or "").lower()
+            if "json" not in ctype:
+                return
+            u = response.url.lower()
+            for tracker in CAPTURE_SKIP_HOSTS:
+                if tracker in u:
+                    return
+            body = response.text()
+        except Exception:  # noqa: BLE001
+            return
+        if len(body) < 200 or len(body) > 150_000:
+            return
+        if captured_total + len(body) > CAPTURE_MAX_TOTAL:
+            return
+        captured_apis.append((response.url, body))
+        captured_total += len(body)
 
     try:
         with sync_playwright() as p:
@@ -381,6 +427,7 @@ def _fetch_with_playwright(url: str) -> tuple[int, str] | None:
                 )
                 context.add_init_script(_STEALTH_INIT_SCRIPT)
                 page = context.new_page()
+                page.on("response", _on_response)
 
                 page.goto(
                     url,
@@ -409,10 +456,43 @@ def _fetch_with_playwright(url: str) -> tuple[int, str] | None:
                     page.wait_for_timeout(interval_ms)
                     elapsed += interval_ms
 
-                # One more small settle so lazy-loaded price/description
-                # blocks land in the DOM before we snapshot.
-                page.wait_for_timeout(1200)
+                # Extra 3s settle so async variant/pricing XHRs land in
+                # captured_apis before we snapshot. Was 1.2s — bumped
+                # for the API-capture path to give the option-picker XHR
+                # room to fire.
+                page.wait_for_timeout(3000)
                 html = page.content()
+
+                # Append captured JSON API bodies so downstream extraction
+                # can hand them to Claude. Placed just before </body> so
+                # HTML validity is preserved for anyone else who might
+                # parse the returned string.
+                if captured_apis:
+                    parts: list[str] = []
+                    for resp_url, body in captured_apis:
+                        safe_body = body.replace("</script", "<\\/script")
+                        safe_url = resp_url[:250].replace('"', "&quot;").replace("<", "&lt;")
+                        parts.append(
+                            f'<script type="application/json" id="__captured_xhr__" '
+                            f'data-url="{safe_url}">{safe_body}</script>'
+                        )
+                    appendix = "\n".join(parts)
+                    if re.search(r"</body\s*>", html, flags=re.IGNORECASE):
+                        html = re.sub(
+                            r"</body\s*>",
+                            appendix + "</body>",
+                            html,
+                            count=1,
+                            flags=re.IGNORECASE,
+                        )
+                    else:
+                        html = html + appendix
+                    print(
+                        f"[playwright] captured {len(captured_apis)} JSON XHRs "
+                        f"totalling {captured_total} chars from {url[:80]}"
+                    )
+                else:
+                    print(f"[playwright] captured 0 JSON XHRs from {url[:80]}")
 
                 # HTTP status hint — Playwright doesn't cleanly surface
                 # the final navigation status; treat any body with > 0
