@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, ExternalLink, Search, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, Search, X } from "lucide-react";
 import { UnmapButton } from "@/components/UnmapButton";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { fmtMoney, fmtBasis, fmtAED, toAED } from "@/lib/format";
@@ -82,18 +82,6 @@ export function MappedFilters({ items }: { items: MappedItem[] }) {
   // Default: newest mapping first — matches the backend's ORDER BY created_at DESC
   const [sortKey, setSortKey] = useState<SortKey>("mapped");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  // Grouped view: one Rayna option can be mapped to multiple competitor
-  // options (one per seller). Group by rayna_option_id and let the user
-  // expand a group to see its mappings. Closed by default per user preference.
-  const [openGroups, setOpenGroups] = useState<Set<number>>(new Set());
-  function toggleGroup(key: number) {
-    setOpenGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
 
   // Precompute gaps once
   const gaps = useMemo(() => items.map(computeGap), [items]);
@@ -200,31 +188,20 @@ export function MappedFilters({ items }: { items: MappedItem[] }) {
     return rows;
   }, [items, gaps, q, seller, position, country, city, sortKey, sortDir]);
 
-  // Group the sorted+filtered flat list by rayna_option_id, preserving the
-  // order in which each group's first row appeared (so the outer sort still
-  // determines group order).
+  // Rearrange filtered so rows with the same Rayna option cluster together
+  // (preserving first-encounter order from the outer sort). This lets the
+  // hide-duplicates rendering below blank out repeated Rayna option cells
+  // and draw a subtle group divider between distinct options — same table,
+  // less repeated text.
   const grouped = useMemo(() => {
-    const groups = new Map<
-      number,
-      { key: number; header: MappedItem; rows: Array<{ m: MappedItem; gap: GapDisplay }> }
-    >();
+    const buckets = new Map<number, Array<{ m: MappedItem; gap: GapDisplay }>>();
     for (const row of filtered) {
-      const key = row.m.rayna_option_id;
-      if (!groups.has(key)) {
-        groups.set(key, { key, header: row.m, rows: [] });
-      }
-      groups.get(key)!.rows.push(row);
+      const arr = buckets.get(row.m.rayna_option_id);
+      if (arr) arr.push(row);
+      else buckets.set(row.m.rayna_option_id, [row]);
     }
-    return Array.from(groups.values());
+    return Array.from(buckets.values()).flat();
   }, [filtered]);
-
-  function expandAll() {
-    setOpenGroups(new Set(grouped.map((g) => g.key)));
-  }
-  function collapseAll() {
-    setOpenGroups(new Set());
-  }
-  const allOpen = grouped.length > 0 && openGroups.size === grouped.length;
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -374,50 +351,23 @@ export function MappedFilters({ items }: { items: MappedItem[] }) {
         )}
 
         <span className="ml-auto text-[12px] text-[#667085] tnum">
-          Showing{" "}
-          <span className="font-semibold text-[#101828]">
-            {grouped.length}
-          </span>{" "}
-          option{grouped.length === 1 ? "" : "s"} ·{" "}
-          <span className="font-semibold text-[#101828]">{filtered.length}</span>{" "}
-          mapping{filtered.length === 1 ? "" : "s"}
+          Showing <span className="font-semibold text-[#101828]">{filtered.length}</span>{" "}
+          of {items.length}
         </span>
       </div>
 
-      {/* Grouped table — one card per Rayna option, expandable to reveal
-          the seller mappings underneath. */}
+      {/* Section-header layout: Rayna option = section title, sellers = rows
+          underneath. Competitor option name is intentionally NOT shown per row
+          — the section already names the product, and the seller pill links
+          out to the actual competitor page if the reviewer wants the exact
+          variant name. */}
       <div className="bg-white border border-[#E4E7EC] rounded-[12px] overflow-hidden">
-        {/* Column headers — match the sub-row grid so alignments feel intentional. */}
-        <div className="hidden md:grid grid-cols-[24px_2.4fr_1.2fr_2.2fr_1fr_0.9fr_0.9fr_70px] gap-3 px-4 py-3 bg-[#F9FAFB] border-b border-[#E4E7EC] text-[10.5px] font-semibold tracking-[0.05em] uppercase text-[#667085]">
-          <button
-            type="button"
-            onClick={allOpen ? collapseAll : expandAll}
-            className="text-[#667085] hover:text-[#101828] transition-colors"
-            title={allOpen ? "Collapse all" : "Expand all"}
-          >
-            {allOpen ? (
-              <ChevronDown className="w-3.5 h-3.5" strokeWidth={2.5} />
-            ) : (
-              <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-            )}
-          </button>
-          <SortHeader
-            label="Rayna option"
-            active={sortKey === "rayna_option"}
-            dir={sortDir}
-            onClick={() => toggleSort("rayna_option")}
-          />
+        <div className="grid grid-cols-[1.6fr_1fr_0.9fr_1fr_70px] gap-3 px-5 py-3 bg-[#F9FAFB] border-b border-[#E4E7EC] text-[10.5px] font-semibold tracking-[0.05em] uppercase text-[#667085] sticky top-0 z-10">
           <SortHeader
             label="Seller"
             active={sortKey === "seller"}
             dir={sortDir}
             onClick={() => toggleSort("seller")}
-          />
-          <SortHeader
-            label="Competitor option"
-            active={sortKey === "competitor_option"}
-            dir={sortDir}
-            onClick={() => toggleSort("competitor_option")}
           />
           <SortHeader
             label="Competitor"
@@ -446,210 +396,105 @@ export function MappedFilters({ items }: { items: MappedItem[] }) {
             No mappings match this filter.
           </div>
         ) : (
-          <div className="divide-y divide-[#F2F4F7]">
-            {grouped.map((g) => (
-              <GroupBlock
-                key={g.key}
-                group={g}
-                open={openGroups.has(g.key)}
-                onToggle={() => toggleGroup(g.key)}
-              />
-            ))}
+          <div>
+            {grouped.map(({ m, gap }, i) => {
+              const prev = i > 0 ? grouped[i - 1].m : null;
+              const isFirstInGroup =
+                !prev || prev.rayna_option_id !== m.rayna_option_id;
+              return (
+                <div key={m.mapping_id}>
+                  {isFirstInGroup && (
+                    <div
+                      className={`px-5 pt-4 pb-2 bg-gradient-to-b from-[#FFFBF6] to-white ${
+                        i === 0 ? "" : "border-t-2 border-[#E4E7EC]"
+                      }`}
+                    >
+                      <div className="text-[14px] font-bold text-[#101828] leading-snug">
+                        {m.rayna_option_name}
+                      </div>
+                      <div className="text-[11.5px] text-[#667085] mt-1 flex items-center gap-1.5 flex-wrap">
+                        <span className="truncate">{m.product_name}</span>
+                        <span className="text-[#D0D5DD]">·</span>
+                        <span className="font-mono">{fmtBasis(m.rayna_basis)}</span>
+                        <span className="text-[#D0D5DD]">·</span>
+                        <span className="tnum font-semibold text-[#EA580C]">
+                          Rayna {fmtAED(m.rayna_price, m.rayna_currency)}
+                        </span>
+                        {m.rayna_date_price_source === "default" && (
+                          <span
+                            title="No observation for this date; showing default variant price"
+                            className="inline-flex items-center gap-1 text-[9.5px] text-[#B54708] font-semibold"
+                          >
+                            <AlertTriangle className="w-3 h-3" />
+                            default
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <div
+                    className="grid grid-cols-[1.6fr_1fr_0.9fr_1fr_70px] gap-3 px-5 py-3 hover:bg-[#F9FAFB] transition-colors items-center border-t border-[#F2F4F7]"
+                  >
+                    {/* Seller pill — colored badge + domain, clicks out to the
+                        actual competitor PDP so reviewer can inspect the
+                        variant details there. */}
+                    <a
+                      href={m.listing_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 min-w-0 group"
+                      title={`Open ${m.seller_domain} listing (${m.competitor_option_name})`}
+                    >
+                      <span className="w-[24px] h-[24px] rounded-[7px] bg-[#FFF4ED] border border-[#FED7AA] text-[#C2410C] grid place-items-center text-[11px] font-bold shrink-0">
+                        {m.seller_domain[0]?.toUpperCase() || "?"}
+                      </span>
+                      <span className="text-[13px] font-mono text-[#344054] group-hover:text-[#EA580C] truncate">
+                        {m.seller_domain}
+                      </span>
+                      <ExternalLink className="w-3.5 h-3.5 opacity-40 shrink-0 group-hover:opacity-80" />
+                    </a>
+
+                    <div className="text-right whitespace-nowrap">
+                      <div className="tnum text-[13px] font-semibold text-[#101828]">
+                        {fmtAED(m.competitor_price, m.competitor_currency)}
+                      </div>
+                      {m.competitor_price != null &&
+                        (m.competitor_currency || "AED").toUpperCase() !== "AED" && (
+                          <div className="tnum text-[10.5px] text-[#98A2B3]">
+                            {fmtMoney(m.competitor_price, m.competitor_currency)}
+                          </div>
+                        )}
+                      {m.competitor_date_price_source === "default" && (
+                        <div
+                          title="No observation for this date; showing default variant price"
+                          className="inline-flex items-center gap-1 text-[9.5px] text-[#B54708] font-semibold mt-0.5"
+                        >
+                          <AlertTriangle className="w-3 h-3" />
+                          default
+                        </div>
+                      )}
+                    </div>
+
+                    <div className={`text-right whitespace-nowrap tnum text-[12.5px] ${gap.className}`}>
+                      {gap.label}
+                    </div>
+
+                    <span className="tnum text-[11px] text-[#98A2B3] whitespace-nowrap">
+                      {fmtDate(m.created_at)}
+                    </span>
+
+                    <div className="flex justify-end">
+                      <UnmapButton mappingId={m.mapping_id} />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
     </>
   );
-}
-
-function GroupBlock({
-  group,
-  open,
-  onToggle,
-}: {
-  group: {
-    key: number;
-    header: MappedItem;
-    rows: Array<{ m: MappedItem; gap: GapDisplay }>;
-  };
-  open: boolean;
-  onToggle: () => void;
-}) {
-  const { header, rows } = group;
-  const n = rows.length;
-
-  // Aggregate gap range for the closed summary — best (most competitive for
-  // Rayna) to worst. Skip basis_mismatch/unknown rows.
-  const gapPcts = rows
-    .map((r) => {
-      if (r.gap.kind === "basis_mismatch" || r.gap.kind === "unknown") return null;
-      const rAed = toAED(r.m.rayna_price, r.m.rayna_currency);
-      const cAed = toAED(r.m.competitor_price, r.m.competitor_currency);
-      if (rAed == null || cAed == null || rAed === 0) return null;
-      return ((cAed - rAed) / rAed) * 100;
-    })
-    .filter((v): v is number => v != null);
-  const gapMin = gapPcts.length ? Math.min(...gapPcts) : null;
-  const gapMax = gapPcts.length ? Math.max(...gapPcts) : null;
-  const gapSummary =
-    gapMin == null || gapMax == null
-      ? null
-      : Math.abs(gapMax - gapMin) < 0.5
-        ? fmtSignedPct(gapMin)
-        : `${fmtSignedPct(gapMin)} to ${fmtSignedPct(gapMax)}`;
-  const gapTone =
-    gapMax == null
-      ? "text-[#98A2B3]"
-      : gapMax < -0.5
-        ? "text-[#067647]"
-        : gapMin != null && gapMin > 0.5
-          ? "text-[#B42318]"
-          : "text-[#475467]";
-
-  return (
-    <div>
-      {/* Group header — clickable to expand/collapse. */}
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="w-full grid grid-cols-[24px_2.4fr_1.2fr_2.2fr_1fr_0.9fr_0.9fr_70px] gap-3 px-4 py-3.5 text-left hover:bg-[#F9FAFB] transition-colors items-center"
-      >
-        <span className="text-[#667085]">
-          {open ? (
-            <ChevronDown className="w-4 h-4" strokeWidth={2.5} />
-          ) : (
-            <ChevronRight className="w-4 h-4" strokeWidth={2.5} />
-          )}
-        </span>
-        {/* Rayna option + product name + basis */}
-        <div className="min-w-0">
-          <div className="text-[13.5px] font-semibold text-[#101828] leading-snug line-clamp-2">
-            {header.rayna_option_name}
-          </div>
-          <div className="text-[11px] text-[#98A2B3] mt-1 flex items-center gap-1.5">
-            <span className="truncate">{header.product_name}</span>
-            <span className="text-[#D0D5DD]">·</span>
-            <span className="font-mono">{fmtBasis(header.rayna_basis)}</span>
-            <span className="text-[#D0D5DD]">·</span>
-            <span className="tnum font-semibold text-[#344054]">
-              {fmtAED(header.rayna_price, header.rayna_currency)}
-            </span>
-          </div>
-        </div>
-        {/* Seller count pill */}
-        <div className="text-[11.5px] text-[#667085]">
-          <span className="inline-flex items-center gap-1.5 px-2 py-[3px] rounded-full bg-[#FFF4ED] border border-[#FED7AA] text-[#C2410C] font-semibold tnum">
-            {n} seller{n === 1 ? "" : "s"}
-          </span>
-        </div>
-        {/* Aggregate: sellers listed inline when closed */}
-        <div className="text-[11.5px] text-[#667085] truncate">
-          {rows
-            .map((r) => r.m.seller_domain)
-            .filter((v, i, a) => a.indexOf(v) === i)
-            .join(", ")}
-        </div>
-        {/* Competitor price range (closed summary) */}
-        <div className="text-right text-[11.5px] text-[#98A2B3]">
-          {(() => {
-            const prices = rows
-              .map((r) => toAED(r.m.competitor_price, r.m.competitor_currency))
-              .filter((v): v is number => v != null);
-            if (prices.length === 0) return "—";
-            const lo = Math.min(...prices);
-            const hi = Math.max(...prices);
-            return lo === hi
-              ? fmtAED(lo, "AED")
-              : `${fmtAED(lo, "AED")} – ${fmtAED(hi, "AED")}`;
-          })()}
-        </div>
-        {/* Gap range */}
-        <div className={`text-right tnum text-[12px] font-semibold ${gapTone}`}>
-          {gapSummary ?? "—"}
-        </div>
-        {/* Newest mapping date */}
-        <div className="text-[11px] text-[#98A2B3] tnum whitespace-nowrap">
-          {fmtDate(
-            rows
-              .map((r) => r.m.created_at)
-              .sort()
-              .reverse()[0]!,
-          )}
-        </div>
-        <span />
-      </button>
-
-      {/* Expanded sub-rows — one per mapping (seller). */}
-      {open && (
-        <div className="bg-[#FBFBFC] border-t border-[#F2F4F7] divide-y divide-[#F2F4F7]">
-          {rows.map(({ m, gap }) => (
-            <div
-              key={m.mapping_id}
-              className="grid grid-cols-[24px_2.4fr_1.2fr_2.2fr_1fr_0.9fr_0.9fr_70px] gap-3 px-4 py-3 items-center hover:bg-white transition-colors"
-            >
-              <span />
-              {/* Indent under the group header — subtle */}
-              <span className="text-[11.5px] text-[#98A2B3] pl-1">
-                ↳ mapping
-              </span>
-              <a
-                href={m.listing_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[12.5px] font-mono text-[#344054] hover:text-[#EA580C] inline-flex items-center gap-1.5 truncate"
-              >
-                {m.seller_domain}
-                <ExternalLink className="w-3 h-3 opacity-50 shrink-0" />
-              </a>
-              <div className="min-w-0">
-                <div className="text-[13px] text-[#101828] line-clamp-2 leading-snug">
-                  {m.competitor_option_name}
-                </div>
-                <div className="text-[11px] text-[#98A2B3] font-mono mt-1">
-                  {fmtBasis(m.competitor_basis)}
-                </div>
-              </div>
-              <div className="text-right whitespace-nowrap">
-                <div className="tnum text-[13px] font-semibold text-[#101828]">
-                  {fmtAED(m.competitor_price, m.competitor_currency)}
-                </div>
-                {m.competitor_price != null &&
-                  (m.competitor_currency || "AED").toUpperCase() !== "AED" && (
-                    <div className="tnum text-[10.5px] text-[#98A2B3]">
-                      {fmtMoney(m.competitor_price, m.competitor_currency)}
-                    </div>
-                  )}
-                {m.competitor_date_price_source === "default" && (
-                  <div
-                    title="No observation for this date; showing default variant price"
-                    className="inline-flex items-center gap-1 text-[9.5px] text-[#B54708] font-semibold mt-0.5"
-                  >
-                    <AlertTriangle className="w-3 h-3" />
-                    default
-                  </div>
-                )}
-              </div>
-              <div className={`text-right whitespace-nowrap tnum text-[12.5px] ${gap.className}`}>
-                {gap.label}
-              </div>
-              <span className="tnum text-[11px] text-[#98A2B3] whitespace-nowrap">
-                {fmtDate(m.created_at)}
-              </span>
-              <div className="flex justify-end">
-                <UnmapButton mappingId={m.mapping_id} />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function fmtSignedPct(pct: number): string {
-  if (Math.abs(pct) < 0.05) return "0.0%";
-  return `${pct > 0 ? "+" : ""}${pct.toFixed(1)}%`;
 }
 
 function SortHeader({
