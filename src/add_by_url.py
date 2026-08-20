@@ -63,6 +63,7 @@ _JS_HEAVY_DOMAINS: set[str] = {
     "tiqets.com",
     "musement.com",
     "headout.com",
+    "globaltix.com",
     "civitatis.com",
     "tripadvisor.com",
     # OTAs that also expose activity/experience listings behind

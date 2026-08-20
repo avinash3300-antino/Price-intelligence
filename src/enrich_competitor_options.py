@@ -242,8 +242,8 @@ def _extract(
             raw_fp[k] = None
     parsed = OptionFingerprint.model_validate(raw_fp)
 
-    # Preserve vendor-specific keys the ingest wrote (headout_variant_id, etc.)
-    # by merging Claude's output on top of the existing fingerprint.
+    # Merge Claude's output on top of the existing fingerprint so any
+    # keys the caller wrote (e.g. from Add-by-URL) are preserved.
     existing = {}
     try:
         existing = json.loads(row["fingerprint_json"] or "{}") or {}
