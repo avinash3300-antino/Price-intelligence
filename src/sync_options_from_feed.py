@@ -236,6 +236,8 @@ def sync() -> dict[str, Any]:
         }
         stale = list(all_synth_ids - valid_ids)
         orphan_unmapped = 0
+        blackout_protected = 0
+        blackout_products: set[int] = set()
         if stale:
             # only drop if no mapping references them, to be safe
             placeholders = ",".join("?" * len(stale))
@@ -247,7 +249,64 @@ def sync() -> dict[str, Any]:
                     stale,
                 )
             }
-            drop = [i for i in stale if i not in ref]
+
+            # --------------------------------------------------------------
+            # Feed-blackout guard.
+            #
+            # "The feed returned no options for this product" and "this
+            # product has no options" are not the same statement, but the
+            # sweep below can't tell them apart on its own — both look like
+            # a variant that vanished from the cache.
+            #
+            # This bit us for real: on 2026-08-06 the enriched-feed returned
+            # 3 variants for product 33 (Dubai City Tour, option_ids
+            # 41843/41844). By 2026-08-26 the same endpoint returned
+            # `options: []` for it while /api/city/products still listed
+            # those option ids as live. The nightly sync read the empty
+            # array as truth and deleted all three, which silently greys the
+            # product out in the mapping UI with no explanation.
+            #
+            # So: only sweep a variant when the feed still returned OTHER
+            # variants for its product. That keeps genuine removals working
+            # (feed returns 2 where we held 3 → the missing 1 is dropped)
+            # while refusing to act on an all-or-nothing disappearance,
+            # which is far more likely to be an upstream fault than a real
+            # catalogue change.
+            # --------------------------------------------------------------
+            stale_product_of: dict[int, int] = {
+                r["id"]: r["rayna_product_id"]
+                for r in conn.execute(
+                    f"SELECT id, rayna_product_id FROM options "
+                    f"WHERE id IN ({placeholders})",
+                    stale,
+                )
+            }
+
+            def _feed_went_dark(option_id: int) -> bool:
+                """True when the feed returned no variants at all for this
+                option's product — i.e. we cannot trust the absence."""
+                pid = stale_product_of.get(option_id)
+                if pid is None:
+                    return False
+                return not by_product.get(pid)
+
+            protected = [i for i in stale if _feed_went_dark(i)]
+            for i in protected:
+                pid = stale_product_of.get(i)
+                if pid is not None:
+                    blackout_products.add(pid)
+            blackout_protected = len(protected)
+            if protected:
+                print(
+                    f"  ! feed-blackout guard: kept {blackout_protected} option(s) "
+                    f"across {len(blackout_products)} product(s) whose feed "
+                    f"response carried zero options this run "
+                    f"(product ids: {sorted(blackout_products)[:12]}"
+                    f"{' …' if len(blackout_products) > 12 else ''})"
+                )
+
+            protected_set = set(protected)
+            drop = [i for i in stale if i not in ref and i not in protected_set]
             if drop:
                 placeholders = ",".join("?" * len(drop))
                 # price_observations also FK options.id — clear those first
@@ -282,6 +341,8 @@ def sync() -> dict[str, Any]:
         "mappings_dropped_unique_dupe": unique_skipped,
         "legacy_options_deleted": legacy_deleted,
         "stale_variants_dropped": orphan_unmapped,
+        "stale_kept_feed_blackout": blackout_protected,
+        "products_with_empty_feed_options": len(blackout_products),
     }
     return summary
 
