@@ -12,7 +12,13 @@ services:
     volumes:
       # Named volume, not a bind mount — the data must survive image rebuilds
       # and must not be sitting in the repo directory.
-      - pgdata:/var/lib/postgresql/data
+      #
+      # Mount point is /var/lib/postgresql, NOT .../data. Postgres 18 images
+      # store the cluster in a major-version subdirectory (18/docker) so that
+      # `pg_upgrade --link` can run without crossing a mount boundary. Mounting
+      # at .../data is the pre-18 layout and makes the container refuse to
+      # start.
+      - pgdata:/var/lib/postgresql
     healthcheck:
       # api waits on this, so it never starts against a database that is still
       # replaying WAL after a restart.
