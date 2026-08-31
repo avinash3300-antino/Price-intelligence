@@ -43,6 +43,13 @@ RUN playwright install chromium
 # App code — src/ is imported by backend.main.create_mapping_from_url
 COPY backend/ ./backend/
 COPY src/ ./src/
+# Schema DDL: src.db.init_db() reads 001 from here, and the cutover applies
+# 002/003 through this container.
+COPY migrations/ ./migrations/
+# Operational scripts run inside the container because that is where psycopg
+# and the app modules live: the SQLite -> Postgres migration and the owner
+# bootstrap. backup_db.sh runs on the host and is not needed here.
+COPY scripts/ ./scripts/
 
 # data/ is NOT copied — it's mounted from the host at runtime (see docker-compose.yml)
 

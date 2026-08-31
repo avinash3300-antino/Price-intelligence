@@ -1,4 +1,31 @@
 services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: mi-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: market_intel
+      POSTGRES_USER: mi
+      # Must be set in .env. The :? makes compose refuse to start rather than
+      # silently bring up a database with an empty password.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      # Named volume, not a bind mount — the data must survive image rebuilds
+      # and must not be sitting in the repo directory.
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # api waits on this, so it never starts against a database that is still
+      # replaying WAL after a restart.
+      test: ["CMD-SHELL", "pg_isready -U mi -d market_intel"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    # Not published to the host: only the api container needs it.
+    expose:
+      - "5432"
+    networks:
+      - miweb
+
   api:
     build:
       context: .
@@ -7,9 +34,15 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql://mi:${POSTGRES_PASSWORD}@postgres:5432/market_intel
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
-      # Mount the host's data/ read-write so the SQLite DB persists across
-      # container rebuilds and manual-mapping writes stay durable.
+      # data/ still mounts read-write. Postgres is the live database now, but
+      # this directory holds the nightly backups and the pre-cutover SQLite
+      # file, which is the rollback path and is kept deliberately.
       - ./data:/app/data
     expose:
       - "8001"
@@ -52,6 +85,9 @@ services:
       - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - miweb
+
+volumes:
+  pgdata:
 
 networks:
   miweb:
