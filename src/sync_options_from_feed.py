@@ -22,7 +22,7 @@ from typing import Any
 
 from src import config, db, feed_cache
 
-# legacy options have AUTOINCREMENT IDs starting at 1. Any id below this is
+# legacy options have sequence-assigned ids starting at 1. Any id below this is
 # considered legacy and migratable. New variant IDs are >= this.
 SYNTHETIC_ID_OFFSET = feed_cache.SYNTHETIC_ID_OFFSET
 
@@ -128,7 +128,6 @@ def sync() -> dict[str, Any]:
     db.init_db()
     conn = db.get_conn()
     try:
-        conn.execute("BEGIN")
 
         # ------------------------------------------------------------------
         # 1. Find legacy Rayna options that still need migrating
@@ -137,7 +136,7 @@ def sync() -> dict[str, Any]:
             dict(r)
             for r in conn.execute(
                 "SELECT id, rayna_product_id, name, pricing_basis, extraction_model "
-                "FROM options WHERE source='rayna' AND id < ?",
+                "FROM options WHERE source='rayna' AND id < %s",
                 (SYNTHETIC_ID_OFFSET,),
             )
         ]
@@ -146,25 +145,36 @@ def sync() -> dict[str, Any]:
         legacy_ids_referenced = {
             r["rayna_option_id"]
             for r in conn.execute(
-                "SELECT DISTINCT rayna_option_id FROM mappings WHERE rayna_option_id < ?",
+                "SELECT DISTINCT rayna_option_id FROM mappings WHERE rayna_option_id < %s",
                 (SYNTHETIC_ID_OFFSET,),
             )
         }
 
         # ------------------------------------------------------------------
-        # 2. Upsert all variants as `options` rows. INSERT OR REPLACE keeps
-        #    re-runs idempotent and refreshes prices/names.
+        # 2. Upsert all variants as `options` rows. ON CONFLICT DO UPDATE
+        #    keeps re-runs idempotent and refreshes prices/names.
         # ------------------------------------------------------------------
         upserts = 0
         for v in variants:
             conn.execute(
                 """
-                INSERT OR REPLACE INTO options
+                INSERT INTO options
                   (id, source, rayna_product_id, competitor_listing_id,
                    name, pricing_basis, price, currency, market,
                    fingerprint_json, raw_extracted_json,
                    extraction_model, extracted_at)
-                VALUES (?, 'rayna', ?, NULL, ?, ?, ?, ?, ?, ?, '(vercel-feed)', 'vercel-feed', ?)
+                VALUES (%s, 'rayna', %s, NULL, %s, %s, %s, %s, %s, %s, '(vercel-feed)', 'vercel-feed', %s)
+                ON CONFLICT (id) DO UPDATE SET
+                  source = EXCLUDED.source,
+                  rayna_product_id = EXCLUDED.rayna_product_id,
+                  name = EXCLUDED.name,
+                  pricing_basis = EXCLUDED.pricing_basis,
+                  price = EXCLUDED.price,
+                  currency = EXCLUDED.currency,
+                  market = EXCLUDED.market,
+                  fingerprint_json = EXCLUDED.fingerprint_json,
+                  extraction_model = EXCLUDED.extraction_model,
+                  extracted_at = EXCLUDED.extracted_at
                 """,
                 (
                     v["synthetic_id"],
@@ -192,14 +202,14 @@ def sync() -> dict[str, Any]:
             new_id = migration.get(old_id)
             if new_id is None:
                 cur = conn.execute(
-                    "DELETE FROM mappings WHERE rayna_option_id = ?",
+                    "DELETE FROM mappings WHERE rayna_option_id = %s",
                     (old_id,),
                 )
                 mappings_dropped += cur.rowcount or 0
                 continue
             try:
                 cur = conn.execute(
-                    "UPDATE mappings SET rayna_option_id = ? WHERE rayna_option_id = ?",
+                    "UPDATE mappings SET rayna_option_id = %s WHERE rayna_option_id = %s",
                     (new_id, old_id),
                 )
                 mappings_repointed += cur.rowcount or 0
@@ -208,7 +218,7 @@ def sync() -> dict[str, Any]:
                 # rows collapsed to the same new variant for the same
                 # competitor. Drop the dupe.
                 cur = conn.execute(
-                    "DELETE FROM mappings WHERE rayna_option_id = ?",
+                    "DELETE FROM mappings WHERE rayna_option_id = %s",
                     (old_id,),
                 )
                 unique_skipped += cur.rowcount or 0
@@ -217,7 +227,7 @@ def sync() -> dict[str, Any]:
         # 4. Delete legacy Rayna option rows (now unreferenced).
         # ------------------------------------------------------------------
         cur = conn.execute(
-            "DELETE FROM options WHERE source='rayna' AND id < ?",
+            "DELETE FROM options WHERE source='rayna' AND id < %s",
             (SYNTHETIC_ID_OFFSET,),
         )
         legacy_deleted = cur.rowcount or 0
@@ -230,7 +240,7 @@ def sync() -> dict[str, Any]:
         all_synth_ids = {
             r["id"]
             for r in conn.execute(
-                "SELECT id FROM options WHERE source='rayna' AND id >= ?",
+                "SELECT id FROM options WHERE source='rayna' AND id >= %s",
                 (SYNTHETIC_ID_OFFSET,),
             )
         }
@@ -240,7 +250,7 @@ def sync() -> dict[str, Any]:
         blackout_products: set[int] = set()
         if stale:
             # only drop if no mapping references them, to be safe
-            placeholders = ",".join("?" * len(stale))
+            placeholders = ",".join(["%s"] * len(stale))
             ref = {
                 r["rayna_option_id"]
                 for r in conn.execute(
@@ -308,7 +318,7 @@ def sync() -> dict[str, Any]:
             protected_set = set(protected)
             drop = [i for i in stale if i not in ref and i not in protected_set]
             if drop:
-                placeholders = ",".join("?" * len(drop))
+                placeholders = ",".join(["%s"] * len(drop))
                 # price_observations also FK options.id — clear those first
                 # so the options DELETE doesn't fail the constraint. The rows
                 # are meaningless without the parent option anyway.

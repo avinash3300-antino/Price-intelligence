@@ -14,6 +14,15 @@ FIRECRAWL_KEY = os.environ["FIRECRAWL_KEY"]
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 
 DATA_DIR = ROOT / "data"
+
+# Postgres connection string. Overridden per environment via .env; the default
+# targets the local PostgreSQL 18 instance used for development.
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL", "postgresql://localhost:5433/market_intel"
+)
+
+# Legacy SQLite path. The application no longer reads this — it is kept so the
+# migration script and the pre-cutover backups can still find the old file.
 DB_PATH = DATA_DIR / "market_intel.db"
 CATALOG_PATH = DATA_DIR / "rayna_catalog_sample.json"
 CATALOG_LIVE_PATH = DATA_DIR / "rayna_catalog_live.json"

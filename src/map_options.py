@@ -193,7 +193,7 @@ def _already_mapped(rayna_option_id: int, competitor_option_id: int) -> bool:
     conn = db.get_conn()
     try:
         row = conn.execute(
-            "SELECT 1 FROM mappings WHERE rayna_option_id=? AND competitor_option_id=? LIMIT 1",
+            "SELECT 1 FROM mappings WHERE rayna_option_id=%s AND competitor_option_id=%s LIMIT 1",
             (rayna_option_id, competitor_option_id),
         ).fetchone()
         return row is not None
@@ -217,14 +217,14 @@ def _save_mapping(rayna_opt_id, competitor_opt_id, parsed, model, now):
                JOIN options o2 ON o2.id = m.competitor_option_id
                JOIN competitor_listings cl2 ON cl2.id = o2.competitor_listing_id
                JOIN competitors c2 ON c2.id = cl2.competitor_id
-               WHERE m.rayna_option_id = ?
-                 AND m.competitor_option_id != ?
+               WHERE m.rayna_option_id = %s
+                 AND m.competitor_option_id != %s
                  AND c2.seller_domain = (
                    SELECT c3.seller_domain
                    FROM options o3
                    JOIN competitor_listings cl3 ON cl3.id = o3.competitor_listing_id
                    JOIN competitors c3 ON c3.id = cl3.competitor_id
-                   WHERE o3.id = ?
+                   WHERE o3.id = %s
                  )""",
             (rayna_opt_id, competitor_opt_id, competitor_opt_id),
         ).fetchall()
@@ -236,13 +236,18 @@ def _save_mapping(rayna_opt_id, competitor_opt_id, parsed, model, now):
                 return
             if (row["confidence"] or 0) >= parsed.confidence:
                 return
-            conn.execute("DELETE FROM mappings WHERE id=?", (row["mapping_id"],))
+            conn.execute("DELETE FROM mappings WHERE id=%s", (row["mapping_id"],))
 
         conn.execute(
-            """INSERT OR REPLACE INTO mappings
+            """INSERT INTO mappings
                  (rayna_option_id, competitor_option_id, verdict, confidence,
                   diff_notes, judge_model, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s)
+               ON CONFLICT (rayna_option_id, competitor_option_id) DO UPDATE SET
+                 verdict = EXCLUDED.verdict, confidence = EXCLUDED.confidence,
+                 diff_notes = EXCLUDED.diff_notes,
+                 judge_model = EXCLUDED.judge_model,
+                 created_at = EXCLUDED.created_at""",
             (rayna_opt_id, competitor_opt_id, parsed.verdict, parsed.confidence,
              parsed.diff_notes, model, now),
         )
@@ -273,7 +278,7 @@ def run() -> None:
     for pid, anchor in products.items():
         rayna_opts = list(
             conn.execute(
-                "SELECT * FROM options WHERE source='rayna' AND rayna_product_id=?",
+                "SELECT * FROM options WHERE source='rayna' AND rayna_product_id=%s",
                 (pid,),
             )
         )
@@ -283,7 +288,7 @@ def run() -> None:
                    FROM options o
                    JOIN competitor_listings cl ON cl.id = o.competitor_listing_id
                    JOIN competitors c ON c.id = cl.competitor_id
-                   WHERE o.source='competitor' AND c.rayna_product_id=?""",
+                   WHERE o.source='competitor' AND c.rayna_product_id=%s""",
                 (pid,),
             )
         )

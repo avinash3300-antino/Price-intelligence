@@ -8,10 +8,11 @@ Run: uvicorn backend.main:app --host 0.0.0.0 --port 8001 --reload
 from __future__ import annotations
 
 import json
-import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Optional
+
+import psycopg
 
 from datetime import datetime, timezone
 
@@ -19,24 +20,37 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from src import db
+
 ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = ROOT / "data" / "market_intel.db"
 
 
 @contextmanager
 def conn():
-    if not DB_PATH.exists():
-        raise HTTPException(status_code=503, detail=f"DB not found at {DB_PATH}")
-    c = sqlite3.connect(str(DB_PATH))
-    c.row_factory = sqlite3.Row
+    """One Postgres connection per request.
+
+    Autocommit stays off so multi-statement writes are atomic — the manual
+    mapping endpoint deletes a prior mapping then inserts a replacement, and
+    those must land together. Write paths call c.commit() themselves; read
+    paths simply close, which rolls back the empty transaction.
+    """
+    try:
+        c = db.get_conn()
+    except psycopg.OperationalError as e:
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {e}") from e
     try:
         yield c
+    except Exception:
+        c.rollback()
+        raise
     finally:
         c.close()
 
 
-def row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
-    return {k: row[k] for k in row.keys()}
+def row_to_dict(row: Any) -> dict[str, Any]:
+    """Rows already arrive as dicts from psycopg's dict_row factory; copy so
+    callers can mutate without touching the cursor's buffer."""
+    return dict(row)
 
 
 # ---------- Response models ----------
@@ -328,7 +342,14 @@ app.add_middleware(
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "db": str(DB_PATH), "db_exists": DB_PATH.exists()}
+    """Liveness + database reachability. The UI polls this for the
+    'crawler live' indicator, so it must not raise."""
+    try:
+        with conn() as c:
+            c.execute("SELECT 1")
+        return {"ok": True, "db": "postgres", "db_exists": True}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "db": "postgres", "db_exists": False, "error": str(e)[:200]}
 
 
 @app.get("/api/dashboard", response_model=DashboardPayload)
@@ -337,12 +358,14 @@ def dashboard() -> DashboardPayload:
         products = [row_to_dict(r) for r in c.execute("SELECT * FROM products ORDER BY id")]
 
         def scalar(sql: str, *args) -> int:
-            return c.execute(sql, args).fetchone()[0]
+            # dict_row keys the result by column name; every caller here
+            # selects a single aggregate, so take whatever the one value is.
+            return next(iter(c.execute(sql, args).fetchone().values()))
 
         pipeline = PipelineStats(
             products=scalar("SELECT COUNT(*) FROM products"),
             rayna_options=scalar("SELECT COUNT(*) FROM options WHERE source='rayna'"),
-            competitors=scalar("SELECT COUNT(*) FROM competitors WHERE sells_this_product=1"),
+            competitors=scalar("SELECT COUNT(*) FROM competitors WHERE sells_this_product = TRUE"),
             scraped_listings=scalar("SELECT COUNT(*) FROM competitor_listings"),
             competitor_options=scalar("SELECT COUNT(*) FROM options WHERE source='competitor'"),
             mappings=scalar("SELECT COUNT(*) FROM mappings"),
@@ -352,43 +375,96 @@ def dashboard() -> DashboardPayload:
             needs_review=scalar("SELECT COUNT(*) FROM mappings WHERE confidence < 0.7"),
         )
 
+        # ------------------------------------------------------------------
+        # Per-product aggregates.
+        #
+        # This used to run five correlated queries per product — ~6,900 round
+        # trips for the 1,380-product catalogue. SQLite absorbed that because
+        # its queries are in-process function calls; Postgres does not, and the
+        # endpoint measured 5.5x slower before this was folded into four
+        # grouped queries.
+        # ------------------------------------------------------------------
+
+        # Rayna option counts + price summary. COALESCE on pricing_basis keeps
+        # NULL as a distinct value: a product mixing NULL and 'per_adult' has
+        # two bases and must report None, which COUNT(DISTINCT) alone would
+        # miss because it skips NULLs.
+        # Sentinel standing in for a NULL pricing_basis. Cannot be a NUL byte —
+        # Postgres text columns reject those — and cannot collide with a real
+        # basis value (per_adult, private_group, per_vehicle, ...).
+        NULL_BASIS = "__null_basis__"
+        opt_agg: dict[int, dict[str, Any]] = {
+            r["pid"]: r
+            for r in c.execute(
+                """SELECT rayna_product_id AS pid,
+                          COUNT(*)                      AS option_count,
+                          COUNT(price)                  AS priced_count,
+                          MIN(price)                    AS min_price,
+                          MAX(price)                    AS max_price,
+                          COUNT(DISTINCT COALESCE(pricing_basis, %s)) AS n_bases,
+                          MIN(COALESCE(pricing_basis, %s))            AS any_basis,
+                          (ARRAY_AGG(currency ORDER BY id)
+                             FILTER (WHERE price IS NOT NULL))[1]     AS first_priced_currency
+                   FROM options
+                   WHERE source='rayna' AND rayna_product_id IS NOT NULL
+                   GROUP BY rayna_product_id""",
+                (NULL_BASIS, NULL_BASIS),
+            )
+        }
+
+        seller_counts: dict[int, int] = {
+            r["pid"]: r["n"]
+            for r in c.execute(
+                """SELECT rayna_product_id AS pid, COUNT(*) AS n
+                   FROM competitors WHERE sells_this_product = TRUE
+                   GROUP BY rayna_product_id"""
+            )
+        }
+
+        mapped_counts: dict[int, int] = {
+            r["pid"]: r["n"]
+            for r in c.execute(
+                """SELECT ro.rayna_product_id AS pid,
+                          COUNT(DISTINCT m.rayna_option_id) AS n
+                   FROM mappings m
+                   JOIN options ro ON ro.id = m.rayna_option_id
+                   WHERE m.is_manual = TRUE
+                   GROUP BY ro.rayna_product_id"""
+            )
+        }
+
+        # Comparable pairs for every product in one pass. Ordered by price so
+        # the first row of each group is the cheapest — same answer the old
+        # per-product min() gave, but with ties broken deterministically
+        # instead of by whatever order the engine happened to return.
+        comparable: dict[int, list[dict[str, Any]]] = {}
+        for r in c.execute(
+            """SELECT ro.rayna_product_id AS pid,
+                      ro.price AS rp, o.price AS cp, o.currency AS cc,
+                      c2.seller_domain
+               FROM mappings m
+               JOIN options o  ON o.id  = m.competitor_option_id
+               JOIN options ro ON ro.id = m.rayna_option_id
+               JOIN competitor_listings cl ON cl.id = o.competitor_listing_id
+               JOIN competitors c2 ON c2.id = cl.competitor_id
+               WHERE m.verdict IN ('identical','near')
+                 AND o.price IS NOT NULL AND o.price > 0
+                 AND ro.price IS NOT NULL AND ro.price > 0
+                 AND o.pricing_basis = ro.pricing_basis
+                 AND o.currency = ro.currency
+               ORDER BY ro.rayna_product_id, o.price, c2.seller_domain"""
+        ):
+            comparable.setdefault(r["pid"], []).append(r)
+
         stats: list[DashboardStat] = []
         for p in products:
-            option_count = scalar(
-                "SELECT COUNT(*) FROM options WHERE source='rayna' AND rayna_product_id=?",
-                p["id"],
-            )
-            seller_count = scalar(
-                "SELECT COUNT(*) FROM competitors WHERE rayna_product_id=? AND sells_this_product=1",
-                p["id"],
-            )
-            options_mapped_count = scalar(
-                """SELECT COUNT(DISTINCT m.rayna_option_id)
-                   FROM mappings m
-                   JOIN options ro ON ro.id = m.rayna_option_id
-                   WHERE ro.rayna_product_id=? AND m.is_manual=1""",
-                p["id"],
-            )
-
-            comparable_rows = c.execute(
-                """SELECT ro.price AS rp, o.price AS cp, o.currency AS cc, c.seller_domain
-                   FROM mappings m
-                   JOIN options o ON o.id = m.competitor_option_id
-                   JOIN options ro ON ro.id = m.rayna_option_id
-                   JOIN competitor_listings cl ON cl.id = o.competitor_listing_id
-                   JOIN competitors c ON c.id = cl.competitor_id
-                   WHERE ro.rayna_product_id = ?
-                     AND m.verdict IN ('identical','near')
-                     AND o.price IS NOT NULL AND o.price > 0
-                     AND ro.price IS NOT NULL AND ro.price > 0
-                     AND o.pricing_basis = ro.pricing_basis
-                     AND o.currency = ro.currency""",
-                (p["id"],),
-            ).fetchall()
+            pid = p["id"]
+            agg = opt_agg.get(pid)
+            rows = comparable.get(pid, [])
 
             cheapest = None
-            if comparable_rows:
-                best = min(comparable_rows, key=lambda r: r["cp"])
+            if rows:
+                best = rows[0]  # ORDER BY o.price put the cheapest first
                 cheapest = CheapestCompetitor(
                     domain=best["seller_domain"],
                     price=best["cp"],
@@ -398,31 +474,35 @@ def dashboard() -> DashboardPayload:
                     rayna_price=best["rp"],
                 )
 
-            rayna_opt_rows = c.execute(
-                """SELECT price, currency, pricing_basis
-                   FROM options
-                   WHERE source='rayna' AND rayna_product_id=?""",
-                (p["id"],),
-            ).fetchall()
-            priced = [r for r in rayna_opt_rows if r["price"] is not None]
-            unpriced = [r for r in rayna_opt_rows if r["price"] is None]
-            bases = {r["pricing_basis"] for r in rayna_opt_rows}
-            price_summary = RaynaPriceSummary(
-                min_price=min((r["price"] for r in priced), default=None),
-                max_price=max((r["price"] for r in priced), default=None),
-                currency=priced[0]["currency"] if priced else None,
-                priced_count=len(priced),
-                unpriced_count=len(unpriced),
-                pricing_basis=next(iter(bases)) if len(bases) == 1 else None,
-            )
+            if agg:
+                basis = agg["any_basis"]
+                price_summary = RaynaPriceSummary(
+                    min_price=agg["min_price"],
+                    max_price=agg["max_price"],
+                    currency=agg["first_priced_currency"],
+                    priced_count=agg["priced_count"],
+                    unpriced_count=agg["option_count"] - agg["priced_count"],
+                    pricing_basis=(
+                        None
+                        if agg["n_bases"] != 1 or basis == NULL_BASIS
+                        else basis
+                    ),
+                )
+                option_count = agg["option_count"]
+            else:
+                price_summary = RaynaPriceSummary(
+                    min_price=None, max_price=None, currency=None,
+                    priced_count=0, unpriced_count=0, pricing_basis=None,
+                )
+                option_count = 0
 
             stats.append(
                 DashboardStat(
                     product=Product(**p),
                     option_count=option_count,
-                    seller_count=seller_count,
-                    comparable_count=len(comparable_rows),
-                    options_mapped_count=options_mapped_count,
+                    seller_count=seller_counts.get(pid, 0),
+                    comparable_count=len(rows),
+                    options_mapped_count=mapped_counts.get(pid, 0),
                     rayna_price=price_summary,
                     cheapest_competitor=cheapest,
                 )
@@ -434,12 +514,12 @@ def dashboard() -> DashboardPayload:
 @app.get("/api/products/{product_id}/comparison", response_model=ProductComparison)
 def product_comparison(product_id: int) -> ProductComparison:
     with conn() as c:
-        p = c.execute("SELECT * FROM products WHERE id=?", (product_id,)).fetchone()
+        p = c.execute("SELECT * FROM products WHERE id=%s", (product_id,)).fetchone()
         if not p:
             raise HTTPException(status_code=404, detail="Product not found")
 
         rayna_options = c.execute(
-            "SELECT * FROM options WHERE source='rayna' AND rayna_product_id=? ORDER BY id",
+            "SELECT * FROM options WHERE source='rayna' AND rayna_product_id=%s ORDER BY id",
             (product_id,),
         ).fetchall()
 
@@ -454,7 +534,7 @@ def product_comparison(product_id: int) -> ProductComparison:
                    JOIN options o ON o.id = m.competitor_option_id
                    JOIN competitor_listings cl ON cl.id = o.competitor_listing_id
                    JOIN competitors c ON c.id = cl.competitor_id
-                   WHERE m.rayna_option_id=?
+                   WHERE m.rayna_option_id=%s
                    ORDER BY
                      CASE m.verdict WHEN 'identical' THEN 0 WHEN 'near' THEN 1 ELSE 2 END,
                      m.confidence DESC""",
@@ -514,7 +594,7 @@ def review_queue() -> list[ReviewItem]:
                JOIN products p ON p.id = ro.rayna_product_id
                JOIN competitor_listings cl ON cl.id = co.competitor_listing_id
                JOIN competitors c ON c.id = cl.competitor_id
-               WHERE (m.human_reviewed IS NULL OR m.human_reviewed = 0)
+               WHERE (m.human_reviewed IS NULL OR m.human_reviewed = FALSE)
                  AND (m.confidence < 0.7
                       OR (ro.pricing_basis != co.pricing_basis
                           AND ro.pricing_basis != 'unknown'
@@ -563,9 +643,9 @@ def options_by_location(
               p.country         AS product_country,
               p.type            AS product_type,
               (SELECT COUNT(*) FROM competitors c2
-                 WHERE c2.rayna_product_id = p.id AND c2.sells_this_product = 1) AS seller_count,
+                 WHERE c2.rayna_product_id = p.id AND c2.sells_this_product = TRUE) AS seller_count,
               (SELECT COUNT(*) FROM mappings m
-                 WHERE m.rayna_option_id = o.id AND m.is_manual = 1) AS mapped_count
+                 WHERE m.rayna_option_id = o.id AND m.is_manual = TRUE) AS mapped_count
             FROM options o
             JOIN products p ON p.id = o.rayna_product_id
             WHERE o.source = 'rayna'
@@ -573,10 +653,10 @@ def options_by_location(
         )
         args: list[Any] = []
         if country:
-            sql += " AND p.country = ?"
+            sql += " AND p.country = %s"
             args.append(country)
         if city:
-            sql += " AND p.city = ?"
+            sql += " AND p.city = %s"
             args.append(city)
         sql += " ORDER BY p.id, o.id"
 
@@ -607,12 +687,12 @@ def _observations_for(c, option_ids: list[int], target_date: str) -> dict[int, t
     from the result (caller falls back to the option's default price)."""
     if not option_ids:
         return {}
-    ph = ",".join("?" * len(option_ids))
+    ph = ",".join(["%s"] * len(option_ids))
     rows = c.execute(
         f"""
         SELECT po.option_id, po.price, po.currency
         FROM price_observations po
-        WHERE po.target_date = ? AND po.option_id IN ({ph})
+        WHERE po.target_date = %s AND po.option_id IN ({ph})
         AND po.captured_at = (
             SELECT MAX(captured_at) FROM price_observations
             WHERE option_id = po.option_id AND target_date = po.target_date
@@ -640,12 +720,12 @@ def mapping_workspace(
     ``date_price_source='default'``.
     """
     with conn() as c:
-        p = c.execute("SELECT * FROM products WHERE id=?", (product_id,)).fetchone()
+        p = c.execute("SELECT * FROM products WHERE id=%s", (product_id,)).fetchone()
         if not p:
             raise HTTPException(status_code=404, detail="Product not found")
 
         rayna_opts = c.execute(
-            "SELECT * FROM options WHERE source='rayna' AND rayna_product_id=? ORDER BY id",
+            "SELECT * FROM options WHERE source='rayna' AND rayna_product_id=%s ORDER BY id",
             (product_id,),
         ).fetchall()
 
@@ -655,7 +735,7 @@ def mapping_workspace(
             """SELECT o.id FROM options o
                JOIN competitor_listings cl ON cl.id = o.competitor_listing_id
                JOIN competitors cc ON cc.id = cl.competitor_id
-               WHERE o.source='competitor' AND cc.rayna_product_id=?""",
+               WHERE o.source='competitor' AND cc.rayna_product_id=%s""",
             (product_id,),
         ).fetchall()
         comp_ids = [r["id"] for r in comp_rows_pre]
@@ -700,8 +780,8 @@ def mapping_workspace(
                FROM options o
                JOIN competitor_listings cl ON cl.id = o.competitor_listing_id
                JOIN competitors c ON c.id = cl.competitor_id
-               LEFT JOIN mappings m ON m.competitor_option_id = o.id AND m.is_manual = 1
-               WHERE o.source='competitor' AND c.rayna_product_id=?
+               LEFT JOIN mappings m ON m.competitor_option_id = o.id AND m.is_manual = TRUE
+               WHERE o.source='competitor' AND c.rayna_product_id=%s
                ORDER BY c.seller_domain, cl.id, o.id""",
             (product_id,),
         ).fetchall()
@@ -775,7 +855,7 @@ def create_manual_mapping(req: ManualMapRequest) -> ManualMapResponse:
     with conn() as c:
         # sanity: both options must exist and have the right sources
         rayna = c.execute(
-            "SELECT id, source, rayna_product_id FROM options WHERE id=?",
+            "SELECT id, source, rayna_product_id FROM options WHERE id=%s",
             (req.rayna_option_id,),
         ).fetchone()
         comp = c.execute(
@@ -783,7 +863,7 @@ def create_manual_mapping(req: ManualMapRequest) -> ManualMapResponse:
                FROM options o
                JOIN competitor_listings cl ON cl.id = o.competitor_listing_id
                JOIN competitors c ON c.id = cl.competitor_id
-               WHERE o.id=?""",
+               WHERE o.id=%s""",
             (req.competitor_option_id,),
         ).fetchone()
 
@@ -807,14 +887,14 @@ def create_manual_mapping(req: ManualMapRequest) -> ManualMapResponse:
                JOIN options o2 ON o2.id = m.competitor_option_id
                JOIN competitor_listings cl2 ON cl2.id = o2.competitor_listing_id
                JOIN competitors c2 ON c2.id = cl2.competitor_id
-               WHERE m.rayna_option_id = ?
-                 AND m.competitor_option_id != ?
+               WHERE m.rayna_option_id = %s
+                 AND m.competitor_option_id != %s
                  AND c2.seller_domain = (
                    SELECT c3.seller_domain
                    FROM options o3
                    JOIN competitor_listings cl3 ON cl3.id = o3.competitor_listing_id
                    JOIN competitors c3 ON c3.id = cl3.competitor_id
-                   WHERE o3.id = ?
+                   WHERE o3.id = %s
                  )""",
             (req.rayna_option_id, req.competitor_option_id, req.competitor_option_id),
         ).fetchone()
@@ -838,8 +918,8 @@ def create_manual_mapping(req: ManualMapRequest) -> ManualMapResponse:
         #    can only be linked to one Rayna option at a time.
         c.execute(
             """DELETE FROM mappings
-               WHERE competitor_option_id=? AND is_manual=1
-                 AND rayna_option_id != ?""",
+               WHERE competitor_option_id=%s AND is_manual = TRUE
+                 AND rayna_option_id != %s""",
             (req.competitor_option_id, req.rayna_option_id),
         )
 
@@ -848,7 +928,7 @@ def create_manual_mapping(req: ManualMapRequest) -> ManualMapResponse:
         #    rather than INSERT (which would violate the UNIQUE constraint).
         existing = c.execute(
             """SELECT id FROM mappings
-               WHERE rayna_option_id=? AND competitor_option_id=?""",
+               WHERE rayna_option_id=%s AND competitor_option_id=%s""",
             (req.rayna_option_id, req.competitor_option_id),
         ).fetchone()
 
@@ -857,9 +937,9 @@ def create_manual_mapping(req: ManualMapRequest) -> ManualMapResponse:
                 """UPDATE mappings
                    SET verdict='identical', confidence=1.0,
                        diff_notes='Manually mapped by reviewer', judge_model='manual',
-                       human_reviewed=1, human_verdict='identical', is_manual=1,
-                       created_at=?
-                   WHERE id=?""",
+                       human_reviewed=TRUE, human_verdict='identical', is_manual=TRUE,
+                       created_at=%s
+                   WHERE id=%s""",
                 (now, existing["id"]),
             )
             mapping_id = existing["id"]
@@ -869,11 +949,12 @@ def create_manual_mapping(req: ManualMapRequest) -> ManualMapResponse:
                      (rayna_option_id, competitor_option_id, verdict, confidence,
                       diff_notes, judge_model, human_reviewed, human_verdict,
                       is_manual, created_at)
-                   VALUES (?, ?, 'identical', 1.0, 'Manually mapped by reviewer',
-                           'manual', 1, 'identical', 1, ?)""",
+                   VALUES (%s, %s, 'identical', 1.0, 'Manually mapped by reviewer',
+                           'manual', TRUE, 'identical', TRUE, %s)
+                   RETURNING id""",
                 (req.rayna_option_id, req.competitor_option_id, now),
             )
-            mapping_id = cur.lastrowid
+            mapping_id = cur.fetchone()["id"]
         c.commit()
 
         return ManualMapResponse(
@@ -912,7 +993,7 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
                       p.type AS anchor_type, p.market
                FROM options o
                JOIN products p ON o.rayna_product_id = p.id
-               WHERE o.id=? AND o.source='rayna'""",
+               WHERE o.id=%s AND o.source='rayna'""",
             (req.rayna_option_id,),
         ).fetchone()
         if not rayna:
@@ -931,7 +1012,7 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
                JOIN options o2 ON o2.id = m.competitor_option_id
                JOIN competitor_listings cl2 ON cl2.id = o2.competitor_listing_id
                JOIN competitors c2 ON c2.id = cl2.competitor_id
-               WHERE m.rayna_option_id = ? AND c2.seller_domain = ?""",
+               WHERE m.rayna_option_id = %s AND c2.seller_domain = %s""",
             (req.rayna_option_id, seller_domain),
         ).fetchone()
         if conflict:
@@ -1045,7 +1126,7 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
         # 7a. Upsert competitor row
         comp_row = c.execute(
             """SELECT id FROM competitors
-               WHERE rayna_product_id=? AND market=? AND seller_domain=?""",
+               WHERE rayna_product_id=%s AND market=%s AND seller_domain=%s""",
             (rayna["rayna_product_id"], rayna["market"], seller_domain),
         ).fetchone()
         if comp_row:
@@ -1057,21 +1138,23 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
                      seed_url, sells_this_product, discovered_at,
                      classified_as, classifier_confidence, classifier_reason,
                      classified_at)
-                   VALUES (?, ?, ?, ?, ?, 1, ?, 'sells_this_product', 1.0,
-                           'Manually added via URL paste', ?)""",
+                   VALUES (%s, %s, %s, %s, %s, TRUE, %s, 'sells_this_product', 1.0,
+                           'Manually added via URL paste', %s)
+                   RETURNING id""",
                 (
                     rayna["rayna_product_id"], rayna["market"], seller_domain,
                     seller_domain, req.url, now, now,
                 ),
             )
-            competitor_id = cur.lastrowid
+            competitor_id = cur.fetchone()["id"]
 
         # 7b. Insert competitor_listings row (always fresh — one row per paste)
         cur = c.execute(
             """INSERT INTO competitor_listings
                 (competitor_id, listing_url, title, raw_markdown,
                  raw_html, scraped_at, scrape_method)
-               VALUES (?, ?, ?, ?, NULL, ?, 'manual_url')""",
+               VALUES (%s, %s, %s, %s, NULL, %s, 'manual_url')
+               RETURNING id""",
             (
                 competitor_id, req.url,
                 page_title or (extracted_list[0].name if extracted_list else ""),
@@ -1079,7 +1162,7 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
                 now,
             ),
         )
-        listing_id = cur.lastrowid
+        listing_id = cur.fetchone()["id"]
 
         # 7c. Insert every extracted option, mapping the best one only.
         # Every price is normalized to AED here using the daily fx_rates cache
@@ -1101,7 +1184,8 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
                     (source, competitor_listing_id, name, pricing_basis,
                      price, currency, market, fingerprint_json,
                      raw_extracted_json, extraction_model, extracted_at)
-                   VALUES ('competitor', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES ('competitor', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                   RETURNING id""",
                 (
                     listing_id,
                     opt.name,
@@ -1115,7 +1199,7 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
                     now,
                 ),
             )
-            opt_id = cur.lastrowid
+            opt_id = cur.fetchone()["id"]
             v = verdicts[i]
             is_target = i == best_idx
 
@@ -1125,14 +1209,15 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
                         (rayna_option_id, competitor_option_id, verdict, confidence,
                          diff_notes, judge_model, human_reviewed, human_verdict,
                          is_manual, created_at)
-                       VALUES (?, ?, ?, ?, ?, ?, 0, NULL, 1, ?)""",
+                       VALUES (%s, %s, %s, %s, %s, %s, FALSE, NULL, TRUE, %s)
+                       RETURNING id""",
                     (
                         req.rayna_option_id, opt_id,
                         v.verdict, v.confidence,
                         diff_prefix + v.diff_notes, judge_model, now,
                     ),
                 )
-                mapping_id = cur.lastrowid
+                mapping_id = cur.fetchone()["id"]
 
             saved_options.append({
                 "competitor_option_id": opt_id,
@@ -1173,7 +1258,7 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
 @app.delete("/api/mappings/{mapping_id}", status_code=204)
 def delete_mapping(mapping_id: int):
     with conn() as c:
-        row = c.execute("SELECT is_manual FROM mappings WHERE id=?", (mapping_id,)).fetchone()
+        row = c.execute("SELECT is_manual FROM mappings WHERE id=%s", (mapping_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Mapping not found")
         if row["is_manual"] != 1:
@@ -1181,7 +1266,7 @@ def delete_mapping(mapping_id: int):
                 status_code=403,
                 detail="Refusing to delete an automated (Claude) mapping; only is_manual=1 rows can be deleted via this endpoint.",
             )
-        c.execute("DELETE FROM mappings WHERE id=?", (mapping_id,))
+        c.execute("DELETE FROM mappings WHERE id=%s", (mapping_id,))
         c.commit()
         return None
 
@@ -1199,7 +1284,7 @@ def delete_competitor_option(option_id: int):
     with conn() as c:
         row = c.execute(
             """SELECT o.id, o.competitor_listing_id, o.source
-               FROM options o WHERE o.id=?""",
+               FROM options o WHERE o.id=%s""",
             (option_id,),
         ).fetchone()
         if not row:
@@ -1211,16 +1296,16 @@ def delete_competitor_option(option_id: int):
             )
         listing_id = row["competitor_listing_id"]
 
-        c.execute("DELETE FROM mappings WHERE competitor_option_id=?", (option_id,))
-        c.execute("DELETE FROM price_observations WHERE option_id=?", (option_id,))
-        c.execute("DELETE FROM options WHERE id=?", (option_id,))
+        c.execute("DELETE FROM mappings WHERE competitor_option_id=%s", (option_id,))
+        c.execute("DELETE FROM price_observations WHERE option_id=%s", (option_id,))
+        c.execute("DELETE FROM options WHERE id=%s", (option_id,))
 
         remaining = c.execute(
-            "SELECT COUNT(*) FROM options WHERE competitor_listing_id=?",
+            "SELECT COUNT(*) AS n FROM options WHERE competitor_listing_id=%s",
             (listing_id,),
-        ).fetchone()[0]
+        ).fetchone()["n"]
         if remaining == 0:
-            c.execute("DELETE FROM competitor_listings WHERE id=?", (listing_id,))
+            c.execute("DELETE FROM competitor_listings WHERE id=%s", (listing_id,))
 
         c.commit()
         return None
@@ -1234,7 +1319,7 @@ def delete_competitor(competitor_id: int):
     Reviewer can re-add later via Add-by-URL."""
     with conn() as c:
         row = c.execute(
-            "SELECT id FROM competitors WHERE id=?", (competitor_id,)
+            "SELECT id FROM competitors WHERE id=%s", (competitor_id,)
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Competitor not found")
@@ -1245,7 +1330,7 @@ def delete_competitor(competitor_id: int):
                WHERE competitor_option_id IN (
                  SELECT o.id FROM options o
                  JOIN competitor_listings cl ON cl.id = o.competitor_listing_id
-                 WHERE cl.competitor_id = ?
+                 WHERE cl.competitor_id = %s
                )""",
             (competitor_id,),
         )
@@ -1255,7 +1340,7 @@ def delete_competitor(competitor_id: int):
                WHERE option_id IN (
                  SELECT o.id FROM options o
                  JOIN competitor_listings cl ON cl.id = o.competitor_listing_id
-                 WHERE cl.competitor_id = ?
+                 WHERE cl.competitor_id = %s
                )""",
             (competitor_id,),
         )
@@ -1263,17 +1348,17 @@ def delete_competitor(competitor_id: int):
         c.execute(
             """DELETE FROM options
                WHERE competitor_listing_id IN (
-                 SELECT id FROM competitor_listings WHERE competitor_id = ?
+                 SELECT id FROM competitor_listings WHERE competitor_id = %s
                )""",
             (competitor_id,),
         )
         # 4. listings
         c.execute(
-            "DELETE FROM competitor_listings WHERE competitor_id=?",
+            "DELETE FROM competitor_listings WHERE competitor_id=%s",
             (competitor_id,),
         )
         # 5. the seller row itself
-        c.execute("DELETE FROM competitors WHERE id=?", (competitor_id,))
+        c.execute("DELETE FROM competitors WHERE id=%s", (competitor_id,))
         c.commit()
         return None
 
@@ -1302,21 +1387,21 @@ def review_mapping(mapping_id: int, req: ReviewDecisionRequest) -> ReviewDecisio
     """
     with conn() as c:
         row = c.execute(
-            "SELECT verdict FROM mappings WHERE id=?", (mapping_id,)
+            "SELECT verdict FROM mappings WHERE id=%s", (mapping_id,)
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Mapping not found")
         if req.approve:
             c.execute(
                 """UPDATE mappings
-                     SET human_reviewed=1,
-                         human_verdict=?
-                   WHERE id=?""",
+                     SET human_reviewed=TRUE,
+                         human_verdict=%s
+                   WHERE id=%s""",
                 (row["verdict"], mapping_id),
             )
             action = "approved"
         else:
-            c.execute("DELETE FROM mappings WHERE id=?", (mapping_id,))
+            c.execute("DELETE FROM mappings WHERE id=%s", (mapping_id,))
             action = "rejected"
         c.commit()
         return ReviewDecisionResponse(mapping_id=mapping_id, action=action)
@@ -1352,7 +1437,7 @@ def mapped_list(date: Optional[str] = None) -> list[MappedItem]:
                JOIN products p ON p.id = ro.rayna_product_id
                JOIN competitor_listings cl ON cl.id = co.competitor_listing_id
                JOIN competitors c ON c.id = cl.competitor_id
-               WHERE m.is_manual = 1
+               WHERE m.is_manual = TRUE
                ORDER BY m.created_at DESC"""
         ).fetchall()
 

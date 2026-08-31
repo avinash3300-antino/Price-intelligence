@@ -1,6 +1,6 @@
 """Ingest the full Rayna catalogue from the live API endpoint.
 
-Pulls https://data-projects-flax.vercel.app/api/enriched-feed?format=json, caches
+Pulls https://data-projects-flax.vercel.app/api/enriched-feed%sformat=json, caches
 the raw response to data/rayna_catalog_live.json (so the rest of the pipeline can
 run offline / for debugging), then upserts every row into the products table.
 
@@ -78,9 +78,15 @@ def ingest(only_pilot: bool = False) -> int:
         for pid, r in by_id.items():
             cur.execute(
                 """
-                INSERT OR REPLACE INTO products
+                INSERT INTO products
                   (id, name, type, city, country, market, currency, url, raw_json, ingested_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (id) DO UPDATE SET
+                  name = EXCLUDED.name, type = EXCLUDED.type,
+                  city = EXCLUDED.city, country = EXCLUDED.country,
+                  market = EXCLUDED.market, currency = EXCLUDED.currency,
+                  url = EXCLUDED.url, raw_json = EXCLUDED.raw_json,
+                  ingested_at = EXCLUDED.ingested_at
                 """,
                 (
                     pid,

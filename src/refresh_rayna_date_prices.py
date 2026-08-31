@@ -70,7 +70,6 @@ def refresh(
     n_missing_option = 0
 
     try:
-        conn.execute("BEGIN")
         # existing rayna option ids in DB (we can only insert observations for
         # options that actually exist, else FK will reject)
         valid_option_ids = {
@@ -89,7 +88,7 @@ def refresh(
             # delete prior observations for this option so re-runs don't stack
             if not dry_run:
                 conn.execute(
-                    "DELETE FROM price_observations WHERE option_id=?",
+                    "DELETE FROM price_observations WHERE option_id=%s",
                     (synth_id,),
                 )
 
@@ -108,7 +107,7 @@ def refresh(
                         """INSERT INTO price_observations
                            (option_id, price, currency, market,
                             target_date, captured_at, is_spike_flagged, capture_method)
-                           VALUES (?, ?, ?, ?, ?, ?, 0, 'vercel-feed')""",
+                           VALUES (%s, %s, %s, %s, %s, %s, 0, 'vercel-feed')""",
                         (synth_id, float(price), currency, market, d, now),
                     )
                     n_rows += 1
