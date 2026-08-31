@@ -832,7 +832,7 @@ function OptionPanel({
     setOptions(null);
     setError(null);
     const qs = new URLSearchParams({ country, city }).toString();
-    fetch(`${API_BASE_PUBLIC}/api/options/by-location?${qs}`, { cache: "no-store" })
+    fetch(`${API_BASE_PUBLIC}/api/options/by-location?${qs}`, { cache: "no-store", credentials: "include" })
       .then((r) => {
         if (!r.ok) throw new Error(`API ${r.status}`);
         return r.json();
@@ -1173,7 +1173,7 @@ function ComparePanel({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetch(workspaceUrl, { cache: "no-store" })
+    fetch(workspaceUrl, { cache: "no-store", credentials: "include" })
       .then((r) => {
         if (!r.ok) throw new Error(`API ${r.status}`);
         return r.json();
@@ -1194,7 +1194,7 @@ function ComparePanel({
 
   function refresh() {
     startTransition(() => {
-      fetch(workspaceUrl, { cache: "no-store" })
+      fetch(workspaceUrl, { cache: "no-store", credentials: "include" })
         .then((r) => r.json())
         .then((data: ProductMappingPayload) => setWorkspace(data))
         .catch(console.error);
@@ -1284,6 +1284,7 @@ function ComparePanel({
     try {
       const r = await fetch(`${API_BASE_PUBLIC}/api/mappings/manual`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           rayna_option_id: p.raynaId,
@@ -1314,6 +1315,7 @@ function ComparePanel({
     try {
       const r = await fetch(`${API_BASE_PUBLIC}/api/mappings/${p.mappingId}`, {
         method: "DELETE",
+        credentials: "include",
       });
       if (!r.ok && r.status !== 204) {
         toast.error(`Unmap failed (${r.status})`);
@@ -1375,7 +1377,7 @@ function ComparePanel({
     try {
       const r = await fetch(
         `${API_BASE_PUBLIC}/api/competitor-options/${p.optionId}`,
-        { method: "DELETE" },
+        { method: "DELETE", credentials: "include" },
       );
       if (!r.ok && r.status !== 204) {
         let detail = `Delete failed (${r.status})`;
@@ -1401,7 +1403,7 @@ function ComparePanel({
     try {
       const r = await fetch(
         `${API_BASE_PUBLIC}/api/competitors/${p.competitorId}`,
-        { method: "DELETE" },
+        { method: "DELETE", credentials: "include" },
       );
       if (!r.ok && r.status !== 204) {
         let detail = `Delete failed (${r.status})`;

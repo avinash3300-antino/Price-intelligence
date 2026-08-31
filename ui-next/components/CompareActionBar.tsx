@@ -54,6 +54,7 @@ export function CompareActionBar({
     try {
       const r = await fetch(`${API_BASE_PUBLIC}/api/mappings/manual`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           rayna_option_id: raynaOptionId,
@@ -79,7 +80,7 @@ export function CompareActionBar({
     try {
       const r = await fetch(
         `${API_BASE_PUBLIC}/api/mappings/${mappingId}`,
-        { method: "DELETE" },
+        { method: "DELETE", credentials: "include" },
       );
       if (!r.ok && r.status !== 204) {
         const msg = await readErrorDetail(r, `Unmap failed (${r.status})`);
@@ -99,7 +100,7 @@ export function CompareActionBar({
     try {
       const del = await fetch(
         `${API_BASE_PUBLIC}/api/mappings/${existingMapping.mapping_id}`,
-        { method: "DELETE" },
+        { method: "DELETE", credentials: "include" },
       );
       if (!del.ok && del.status !== 204) {
         const msg = await readErrorDetail(del, `Unmap failed (${del.status})`);
@@ -108,6 +109,7 @@ export function CompareActionBar({
       }
       const put = await fetch(`${API_BASE_PUBLIC}/api/mappings/manual`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           rayna_option_id: raynaOptionId,

@@ -157,6 +157,7 @@ export function ReviewQueueTable({ items }: { items: ReviewItem[] }) {
         `${API_BASE_PUBLIC}/api/mappings/${item.mapping_id}/review`,
         {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ approve }),
         },

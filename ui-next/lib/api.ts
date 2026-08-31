@@ -6,12 +6,17 @@
  */
 
 // Server-side (Node, inside the web container during SSR) needs an absolute
-// URL — Node's fetch rejects relative paths. Browser code hits the same origin
-// so nginx can route /api/* to the api container.
+// URL — Node's fetch rejects relative paths.
+//
+// Browser-side is always same-origin, deliberately not configurable. The
+// session cookie is httpOnly and SameSite=Lax, so pointing the browser at
+// another origin means it is never sent and every request comes back 401.
+// Same origin is served by nginx in production and by the /api rewrite in
+// next.config.ts during development.
 const API_BASE =
   typeof window === "undefined"
     ? process.env.API_URL_INTERNAL ?? "http://localhost:8001"
-    : process.env.NEXT_PUBLIC_API_URL ?? "";
+    : "";
 
 /** Thrown when the API rejects the session. Pages catch this and redirect. */
 export class UnauthenticatedError extends Error {

@@ -77,6 +77,7 @@ export function Topbar({ user }: TopbarProps) {
       try {
         const r = await fetch(`${API_BASE_PUBLIC}/api/health`, {
           cache: "no-store",
+          credentials: "include",
         });
         if (r.ok && !cancelled) {
           const body = (await r.json()) as { ok?: boolean };

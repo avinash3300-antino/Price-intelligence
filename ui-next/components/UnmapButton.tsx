@@ -20,6 +20,7 @@ export function UnmapButton({ mappingId }: { mappingId: number }) {
     try {
       const r = await fetch(`${API_BASE_PUBLIC}/api/mappings/${mappingId}`, {
         method: "DELETE",
+        credentials: "include",
       });
       if (!r.ok && r.status !== 204) {
         toast.error(`Unmap failed (${r.status})`);
