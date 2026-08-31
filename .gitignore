@@ -40,3 +40,6 @@ build/
 # Claude
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# Nightly backups from scripts/backup_db.sh
+data/backups/
