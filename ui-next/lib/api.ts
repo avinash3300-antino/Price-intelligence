@@ -195,6 +195,18 @@ export interface MappedItem {
   // Present only when getMapped(date) was called with a date param.
   rayna_date_price_source?: "observation" | "default" | null;
   competitor_date_price_source?: "observation" | "default" | null;
+  // Evidence for why this pair is treated as a match. `judge_model === "manual"`
+  // means a human linked it by hand and the adjudicator never saw it — the
+  // verdict/confidence on those rows are placeholders, not a model's opinion.
+  verdict: "identical" | "near" | "different";
+  confidence: number;
+  diff_notes: string;
+  judge_model: string | null;
+  is_manual: boolean;
+  human_reviewed: boolean;
+  rayna_fingerprint: Record<string, unknown>;
+  competitor_fingerprint: Record<string, unknown>;
+  listing_scraped_at: string | null;
 }
 
 export interface ReviewItem {

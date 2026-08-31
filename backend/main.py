@@ -268,6 +268,20 @@ class MappedItem(BaseModel):
     # each price side is a real per-date observation or the fallback default.
     rayna_date_price_source: Optional[str] = None
     competitor_date_price_source: Optional[str] = None
+    # ---- Evidence: why this pair is considered a match ----
+    # These already existed on `mappings` but never reached /mapped, so the
+    # page showed a price gap with no way to see what the adjudicator
+    # actually concluded (or that a human overrode it by hand).
+    verdict: str
+    confidence: float
+    diff_notes: str = ""
+    judge_model: Optional[str] = None
+    is_manual: bool = False
+    human_reviewed: bool = False
+    rayna_fingerprint: dict[str, Any] = {}
+    competitor_fingerprint: dict[str, Any] = {}
+    # When the seller page was last fetched — drives the staleness hint.
+    listing_scraped_at: Optional[str] = None
 
 
 class ReviewItem(BaseModel):
@@ -1318,15 +1332,20 @@ def mapped_list(date: Optional[str] = None) -> list[MappedItem]:
     with conn() as c:
         rows = c.execute(
             """SELECT m.id AS mapping_id, m.created_at,
+                      m.verdict, m.confidence, m.diff_notes, m.judge_model,
+                      m.is_manual, m.human_reviewed,
                       p.id AS product_id, p.name AS product_name,
                       p.country AS product_country, p.city AS product_city,
                       ro.id AS rayna_option_id, ro.name AS rayna_option_name,
                       ro.price AS rayna_price, ro.currency AS rayna_currency,
                       ro.pricing_basis AS rayna_basis,
+                      ro.fingerprint_json AS rayna_fingerprint_json,
                       co.id AS competitor_option_id, co.name AS competitor_option_name,
                       co.price AS competitor_price, co.currency AS competitor_currency,
                       co.pricing_basis AS competitor_basis,
-                      c.seller_domain, cl.listing_url
+                      co.fingerprint_json AS competitor_fingerprint_json,
+                      c.seller_domain, cl.listing_url,
+                      cl.scraped_at AS listing_scraped_at
                FROM mappings m
                JOIN options ro ON ro.id = m.rayna_option_id
                JOIN options co ON co.id = m.competitor_option_id
@@ -1351,6 +1370,14 @@ def mapped_list(date: Optional[str] = None) -> list[MappedItem]:
         out: list[MappedItem] = []
         for r in rows:
             d = {k: r[k] for k in r.keys()}
+            # Fingerprints are stored as JSON text; the drawer wants objects.
+            d["rayna_fingerprint"] = json.loads(d.pop("rayna_fingerprint_json") or "{}")
+            d["competitor_fingerprint"] = json.loads(
+                d.pop("competitor_fingerprint_json") or "{}"
+            )
+            d["diff_notes"] = d.get("diff_notes") or ""
+            d["is_manual"] = bool(d.get("is_manual"))
+            d["human_reviewed"] = bool(d.get("human_reviewed"))
             if date:
                 if r["rayna_option_id"] in rayna_obs:
                     p, cur = rayna_obs[r["rayna_option_id"]]

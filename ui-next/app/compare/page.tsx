@@ -9,6 +9,13 @@ import {
   type CompetitorOptionForMapping,
 } from "@/lib/api";
 import { fmtBasis, fmtField, fmtMoney } from "@/lib/format";
+import {
+  FIELDS,
+  VENDOR_KEYS,
+  hasMeaningfulData,
+  pickFirst,
+  type FieldRow,
+} from "@/lib/fingerprint";
 
 export const dynamic = "force-dynamic";
 
@@ -21,102 +28,6 @@ type SearchParams = Promise<{
 
 function isValidIsoDate(s: string | undefined): s is string {
   return !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
-}
-
-interface FieldRow {
-  label: string;
-  raynaKeys: string[];
-  compKeys: string[];
-  format?: (v: unknown) => unknown;
-}
-
-const DURATION_FMT = (v: unknown) => {
-  if (typeof v === "number") return `${v} min`;
-  return v;
-};
-
-const HOURS_FMT = (v: unknown) => {
-  if (typeof v === "number") return `≤ ${v} hrs`;
-  return v;
-};
-
-const FIELDS: FieldRow[] = [
-  { label: "Pricing basis", raynaKeys: ["pricing_basis"], compKeys: ["pricing_basis"] },
-  { label: "Tier", raynaKeys: ["tier"], compKeys: ["tier"] },
-  { label: "Venue", raynaKeys: ["venue"], compKeys: ["venue"] },
-  {
-    label: "Category",
-    raynaKeys: ["activity_category"],
-    compKeys: ["activity_category", "category"],
-  },
-  {
-    label: "Duration",
-    raynaKeys: ["duration_minutes", "duration_label"],
-    compKeys: ["duration_minutes", "duration_label"],
-    format: DURATION_FMT,
-  },
-  {
-    label: "Transfer included",
-    raynaKeys: ["transfer_included"],
-    compKeys: ["transfer_included"],
-  },
-  {
-    label: "Transfer type",
-    raynaKeys: ["transfer_type"],
-    compKeys: ["transfer_type"],
-  },
-  {
-    label: "Meal included",
-    raynaKeys: ["meal_included"],
-    compKeys: ["meal_included"],
-  },
-  { label: "Meal type", raynaKeys: ["meal_type"], compKeys: ["meal_type"] },
-  { label: "Min pax", raynaKeys: ["group_min"], compKeys: ["group_min"] },
-  { label: "Max pax", raynaKeys: ["group_max"], compKeys: ["group_max"] },
-  { label: "Languages", raynaKeys: ["languages"], compKeys: ["languages"] },
-  {
-    label: "Cancellation",
-    raynaKeys: ["cancellation_window_hours", "cancellation_text"],
-    compKeys: ["cancellation_window_hours", "cancellation_text"],
-    format: HOURS_FMT,
-  },
-  { label: "Highlights", raynaKeys: ["highlights"], compKeys: ["highlights"] },
-  { label: "Inclusions", raynaKeys: ["inclusions"], compKeys: ["inclusions"] },
-  { label: "Exclusions", raynaKeys: ["exclusions"], compKeys: ["exclusions"] },
-  { label: "Notes", raynaKeys: ["notes"], compKeys: ["notes"] },
-];
-
-const VENDOR_KEYS = new Set([
-  "vendor",
-  "gt_product_id",
-  "headout_variant_id",
-  "headout_product_id",
-  "vercel_option_id",
-  "group_id",
-  "merchant",
-  "city",
-]);
-
-function pickFirst(
-  fp: Record<string, unknown>,
-  keys: string[],
-): unknown {
-  for (const k of keys) {
-    const v = fp[k];
-    if (v == null) continue;
-    if (Array.isArray(v) && v.length === 0) continue;
-    if (v === "") continue;
-    return v;
-  }
-  return null;
-}
-
-function hasMeaningfulData(fp: Record<string, unknown>): boolean {
-  for (const row of FIELDS) {
-    if (row.label === "Pricing basis" || row.label === "Tier") continue;
-    if (pickFirst(fp, row.compKeys) != null) return true;
-  }
-  return false;
 }
 
 export default async function ComparePage({

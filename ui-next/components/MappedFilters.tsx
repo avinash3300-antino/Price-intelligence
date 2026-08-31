@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Award, ChevronLeft, ChevronRight, ExternalLink, Layers, Search, TrendingDown, TrendingUp, X } from "lucide-react";
 import { UnmapButton } from "@/components/UnmapButton";
+import { MappingEvidenceDrawer } from "@/components/MappingEvidenceDrawer";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { fmtMoney, fmtBasis, fmtAED, toAED } from "@/lib/format";
 import type { MappedItem } from "@/lib/api";
@@ -88,6 +89,9 @@ export function MappedFilters({ items }: { items: MappedItem[] }) {
   // Pagination is over option cards, not raw mapping rows, so a card's
   // sellers never get split across two pages.
   const [page, setPage] = useState(1);
+  // Which mapping's evidence drawer is open. Null = closed. Held here rather
+  // than per-card so only one drawer can ever be mounted.
+  const [evidence, setEvidence] = useState<MappedItem | null>(null);
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const listTopRef = useRef<HTMLDivElement | null>(null);
 
@@ -482,7 +486,11 @@ export function MappedFilters({ items }: { items: MappedItem[] }) {
         <>
           <div className="space-y-3">
             {pagedCards.map((g) => (
-              <OptionCard key={g.header.rayna_option_id} group={g} />
+              <OptionCard
+                key={g.header.rayna_option_id}
+                group={g}
+                onInspect={setEvidence}
+              />
             ))}
           </div>
 
@@ -498,6 +506,11 @@ export function MappedFilters({ items }: { items: MappedItem[] }) {
           />
         </>
       )}
+
+      <MappingEvidenceDrawer
+        item={evidence}
+        onClose={() => setEvidence(null)}
+      />
     </>
   );
 }
@@ -702,11 +715,13 @@ function StatCard({
 
 function OptionCard({
   group,
+  onInspect,
 }: {
   group: {
     header: MappedItem;
     rows: Array<{ m: MappedItem; gap: GapDisplay }>;
   };
+  onInspect: (m: MappedItem) => void;
 }) {
   const { header, rows } = group;
 
@@ -751,25 +766,48 @@ function OptionCard({
       <div className="border-t border-[#F2F4F7]">
         {rows.map(({ m, gap }) => {
           return (
+            // Clicking anywhere on the row opens the evidence drawer — but the
+            // row itself stays a plain div. The seller-name button below is the
+            // real control (keyboard-reachable, correctly labelled); the row
+            // handler is mouse convenience only. Making the row role="button"
+            // would nest the listing link inside a button role.
             <div
               key={m.mapping_id}
-              className="grid grid-cols-[minmax(180px,1.5fr)_1fr_0.9fr_140px_70px] gap-3 px-5 py-3 hover:bg-[#F9FAFB] transition-colors items-center border-t border-[#F2F4F7] first:border-t-0"
+              onClick={() => onInspect(m)}
+              className="group grid grid-cols-[minmax(180px,1.5fr)_1fr_0.9fr_140px_70px] gap-3 px-5 py-3 hover:bg-[#F9FAFB] transition-colors items-center border-t border-[#F2F4F7] first:border-t-0 cursor-pointer"
             >
-              <a
-                href={m.listing_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 min-w-0 group"
-                title={`Open ${m.seller_domain} listing (${m.competitor_option_name})`}
-              >
-                <span className="w-[26px] h-[26px] rounded-[7px] bg-[#FFF4ED] border border-[#FED7AA] text-[#C2410C] grid place-items-center text-[11px] font-bold shrink-0">
-                  {m.seller_domain[0]?.toUpperCase() || "?"}
-                </span>
-                <span className="text-[13px] font-mono text-[#344054] group-hover:text-[#EA580C] truncate">
-                  {m.seller_domain}
-                </span>
-                <ExternalLink className="w-3.5 h-3.5 opacity-40 shrink-0 group-hover:opacity-80" />
-              </a>
+              <div className="inline-flex items-center gap-2 min-w-0">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onInspect(m);
+                  }}
+                  title={`Why is this a match? — Rayna vs ${m.seller_domain}`}
+                  className="inline-flex items-center gap-2 min-w-0 text-left rounded-[7px] outline-none focus-visible:ring-2 focus-visible:ring-[#FDBA74]"
+                >
+                  <span className="w-[26px] h-[26px] rounded-[7px] bg-[#FFF4ED] border border-[#FED7AA] text-[#C2410C] grid place-items-center text-[11px] font-bold shrink-0">
+                    {m.seller_domain[0]?.toUpperCase() || "?"}
+                  </span>
+                  <span className="text-[13px] font-mono text-[#344054] group-hover:text-[#EA580C] truncate">
+                    {m.seller_domain}
+                  </span>
+                </button>
+                {/* Opening the seller page is the secondary action — the row
+                    itself opens the evidence drawer, so this link must not
+                    bubble up into it. */}
+                <a
+                  href={m.listing_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  title={`Open ${m.seller_domain} listing (${m.competitor_option_name})`}
+                  aria-label={`Open ${m.seller_domain} listing in a new tab`}
+                  className="shrink-0 p-0.5 rounded text-[#98A2B3] opacity-40 hover:opacity-100 hover:text-[#EA580C] group-hover:opacity-80 transition"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
 
               <div className="text-right whitespace-nowrap">
                 <div className="tnum text-[14px] font-semibold text-[#101828]">
@@ -789,7 +827,10 @@ function OptionCard({
                 {fmtDate(m.created_at)}
               </span>
 
-              <div className="flex justify-end">
+              <div
+                className="flex justify-end"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <UnmapButton mappingId={m.mapping_id} />
               </div>
             </div>
