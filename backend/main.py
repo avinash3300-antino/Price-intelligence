@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from backend import deps
 from backend.deps import assert_option_in_scope, assert_product_in_scope, require, require_admin
+from backend.routes_admin import router as admin_router
 from backend.routes_auth import router as auth_router
 from src import auth, db
 
@@ -331,6 +332,7 @@ app.add_middleware(
 
 
 app.include_router(auth_router)
+app.include_router(admin_router)
 
 
 @app.get("/api/health")
