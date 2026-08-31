@@ -16,35 +16,20 @@ import psycopg
 
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from src import db
+from backend import deps
+from backend.deps import assert_option_in_scope, assert_product_in_scope, require, require_admin
+from backend.routes_auth import router as auth_router
+from src import auth, db
 
 ROOT = Path(__file__).resolve().parent.parent
 
-
-@contextmanager
-def conn():
-    """One Postgres connection per request.
-
-    Autocommit stays off so multi-statement writes are atomic — the manual
-    mapping endpoint deletes a prior mapping then inserts a replacement, and
-    those must land together. Write paths call c.commit() themselves; read
-    paths simply close, which rolls back the empty transaction.
-    """
-    try:
-        c = db.get_conn()
-    except psycopg.OperationalError as e:
-        raise HTTPException(status_code=503, detail=f"Database unavailable: {e}") from e
-    try:
-        yield c
-    except Exception:
-        c.rollback()
-        raise
-    finally:
-        c.close()
+# The connection helper and the auth gates live in backend.deps so this module
+# and the auth/admin routers share exactly one implementation.
+conn = deps.conn
 
 
 def row_to_dict(row: Any) -> dict[str, Any]:
@@ -340,6 +325,9 @@ app.add_middleware(
 )
 
 
+app.include_router(auth_router)
+
+
 @app.get("/api/health")
 def health():
     """Liveness + database reachability. The UI polls this for the
@@ -353,26 +341,72 @@ def health():
 
 
 @app.get("/api/dashboard", response_model=DashboardPayload)
-def dashboard() -> DashboardPayload:
+def dashboard(
+    user: dict[str, Any] = Depends(
+        deps.require_any("mapping.view", "comparison.view", "mapped.view")
+    ),
+) -> DashboardPayload:
     with conn() as c:
-        products = [row_to_dict(r) for r in c.execute("SELECT * FROM products ORDER BY id")]
+        # Everything below is restricted to the caller's countries/cities.
+        # For an admin this resolves to TRUE and the queries are unchanged;
+        # for a user with no scope rows it resolves to FALSE, so they see an
+        # empty catalogue rather than someone else's.
+        scope_sql, scope_params = auth.scope_predicate(c, user, "p")
+
+        products = [
+            row_to_dict(r)
+            for r in c.execute(
+                f"SELECT p.* FROM products p WHERE {scope_sql} ORDER BY p.id",
+                scope_params,
+            )
+        ]
 
         def scalar(sql: str, *args) -> int:
             # dict_row keys the result by column name; every caller here
             # selects a single aggregate, so take whatever the one value is.
             return next(iter(c.execute(sql, args).fetchone().values()))
 
+        # Each total is joined back to products and filtered, so a scoped
+        # user's KPI strip counts only their own market. Leaving these global
+        # would leak the size of markets they cannot see.
+        comp_join = (
+            "FROM competitors comp JOIN products p ON p.id = comp.rayna_product_id"
+        )
+        listing_join = (
+            "FROM competitor_listings cl "
+            "JOIN competitors comp ON comp.id = cl.competitor_id "
+            "JOIN products p ON p.id = comp.rayna_product_id"
+        )
+        comp_opt_join = (
+            "FROM options o "
+            "JOIN competitor_listings cl ON cl.id = o.competitor_listing_id "
+            "JOIN competitors comp ON comp.id = cl.competitor_id "
+            "JOIN products p ON p.id = comp.rayna_product_id"
+        )
+        map_join = (
+            "FROM mappings m "
+            "JOIN options ro ON ro.id = m.rayna_option_id "
+            "JOIN products p ON p.id = ro.rayna_product_id"
+        )
+
+        def scoped(sql_head: str, extra: str = "") -> int:
+            where = f"WHERE {scope_sql}" + (f" AND {extra}" if extra else "")
+            return scalar(f"{sql_head} {where}", *scope_params)
+
         pipeline = PipelineStats(
-            products=scalar("SELECT COUNT(*) FROM products"),
-            rayna_options=scalar("SELECT COUNT(*) FROM options WHERE source='rayna'"),
-            competitors=scalar("SELECT COUNT(*) FROM competitors WHERE sells_this_product = TRUE"),
-            scraped_listings=scalar("SELECT COUNT(*) FROM competitor_listings"),
-            competitor_options=scalar("SELECT COUNT(*) FROM options WHERE source='competitor'"),
-            mappings=scalar("SELECT COUNT(*) FROM mappings"),
-            identical=scalar("SELECT COUNT(*) FROM mappings WHERE verdict='identical'"),
-            near=scalar("SELECT COUNT(*) FROM mappings WHERE verdict='near'"),
-            different=scalar("SELECT COUNT(*) FROM mappings WHERE verdict='different'"),
-            needs_review=scalar("SELECT COUNT(*) FROM mappings WHERE confidence < 0.7"),
+            products=scoped("SELECT COUNT(*) FROM products p"),
+            rayna_options=scoped(
+                "SELECT COUNT(*) FROM options o JOIN products p ON p.id = o.rayna_product_id",
+                "o.source='rayna'",
+            ),
+            competitors=scoped(f"SELECT COUNT(*) {comp_join}", "comp.sells_this_product = TRUE"),
+            scraped_listings=scoped(f"SELECT COUNT(*) {listing_join}"),
+            competitor_options=scoped(f"SELECT COUNT(*) {comp_opt_join}", "o.source='competitor'"),
+            mappings=scoped(f"SELECT COUNT(*) {map_join}"),
+            identical=scoped(f"SELECT COUNT(*) {map_join}", "m.verdict='identical'"),
+            near=scoped(f"SELECT COUNT(*) {map_join}", "m.verdict='near'"),
+            different=scoped(f"SELECT COUNT(*) {map_join}", "m.verdict='different'"),
+            needs_review=scoped(f"SELECT COUNT(*) {map_join}", "m.confidence < 0.7"),
         )
 
         # ------------------------------------------------------------------
@@ -512,8 +546,12 @@ def dashboard() -> DashboardPayload:
 
 
 @app.get("/api/products/{product_id}/comparison", response_model=ProductComparison)
-def product_comparison(product_id: int) -> ProductComparison:
+def product_comparison(
+    product_id: int,
+    user: dict[str, Any] = Depends(require("comparison.view")),
+) -> ProductComparison:
     with conn() as c:
+        assert_product_in_scope(c, user, product_id)
         p = c.execute("SELECT * FROM products WHERE id=%s", (product_id,)).fetchone()
         if not p:
             raise HTTPException(status_code=404, detail="Product not found")
@@ -576,10 +614,13 @@ def product_comparison(product_id: int) -> ProductComparison:
 
 
 @app.get("/api/review-queue", response_model=list[ReviewItem])
-def review_queue() -> list[ReviewItem]:
+def review_queue(
+    user: dict[str, Any] = Depends(require("review.decide")),
+) -> list[ReviewItem]:
     with conn() as c:
+        scope_sql, scope_params = auth.scope_predicate(c, user, "p")
         rows = c.execute(
-            """SELECT m.id AS mapping_id, m.verdict, m.confidence, m.diff_notes,
+            f"""SELECT m.id AS mapping_id, m.verdict, m.confidence, m.diff_notes,
                       p.id AS product_id, p.name AS product_name,
                       p.country AS product_country, p.city AS product_city,
                       ro.id AS rayna_option_id,
@@ -599,7 +640,9 @@ def review_queue() -> list[ReviewItem]:
                       OR (ro.pricing_basis != co.pricing_basis
                           AND ro.pricing_basis != 'unknown'
                           AND co.pricing_basis != 'unknown'))
+                 AND {scope_sql}
                ORDER BY m.confidence ASC""",
+            scope_params,
         ).fetchall()
 
         items = []
@@ -625,6 +668,7 @@ def review_queue() -> list[ReviewItem]:
 def options_by_location(
     country: Optional[str] = None,
     city: Optional[str] = None,
+    user: dict[str, Any] = Depends(require("mapping.view")),
 ) -> list[OptionListItem]:
     """All Rayna options for products matching country/city. One row per option."""
     with conn() as c:
@@ -652,6 +696,11 @@ def options_by_location(
             """
         )
         args: list[Any] = []
+        # The caller's own country/city filter narrows within their scope; it
+        # can never widen past it.
+        scope_sql, scope_params = auth.scope_predicate(c, user, "p")
+        sql += f" AND {scope_sql}"
+        args.extend(scope_params)
         if country:
             sql += " AND p.country = %s"
             args.append(country)
@@ -710,6 +759,7 @@ def _observations_for(c, option_ids: list[int], target_date: str) -> dict[int, t
 def mapping_workspace(
     product_id: int,
     date: Optional[str] = None,
+    user: dict[str, Any] = Depends(require("mapping.view")),
 ) -> ProductMappingPayload:
     """Everything the mapping split-view needs for one Rayna product.
 
@@ -720,6 +770,7 @@ def mapping_workspace(
     ``date_price_source='default'``.
     """
     with conn() as c:
+        assert_product_in_scope(c, user, product_id)
         p = c.execute("SELECT * FROM products WHERE id=%s", (product_id,)).fetchone()
         if not p:
             raise HTTPException(status_code=404, detail="Product not found")
@@ -851,7 +902,11 @@ def mapping_workspace(
 
 
 @app.post("/api/mappings/manual", response_model=ManualMapResponse, status_code=201)
-def create_manual_mapping(req: ManualMapRequest) -> ManualMapResponse:
+def create_manual_mapping(
+    req: ManualMapRequest,
+    request: Request,
+    user: dict[str, Any] = Depends(require("mapping.create")),
+) -> ManualMapResponse:
     with conn() as c:
         # sanity: both options must exist and have the right sources
         rayna = c.execute(
@@ -876,6 +931,9 @@ def create_manual_mapping(req: ManualMapRequest) -> ManualMapResponse:
                 status_code=400,
                 detail="Rayna option and competitor option belong to different Rayna products",
             )
+
+        # Both options hang off the same product, so one check covers the pair.
+        assert_product_in_scope(c, user, rayna["rayna_product_id"])
 
         # Constraint: one Rayna option can be mapped to at most one option per
         # seller_domain. Different sellers are fine (Headout + GlobalTix OK),
@@ -938,9 +996,9 @@ def create_manual_mapping(req: ManualMapRequest) -> ManualMapResponse:
                    SET verdict='identical', confidence=1.0,
                        diff_notes='Manually mapped by reviewer', judge_model='manual',
                        human_reviewed=TRUE, human_verdict='identical', is_manual=TRUE,
-                       created_at=%s
+                       created_at=%s, created_by=%s
                    WHERE id=%s""",
-                (now, existing["id"]),
+                (now, user["id"], existing["id"]),
             )
             mapping_id = existing["id"]
         else:
@@ -948,13 +1006,23 @@ def create_manual_mapping(req: ManualMapRequest) -> ManualMapResponse:
                 """INSERT INTO mappings
                      (rayna_option_id, competitor_option_id, verdict, confidence,
                       diff_notes, judge_model, human_reviewed, human_verdict,
-                      is_manual, created_at)
+                      is_manual, created_at, created_by)
                    VALUES (%s, %s, 'identical', 1.0, 'Manually mapped by reviewer',
-                           'manual', TRUE, 'identical', TRUE, %s)
+                           'manual', TRUE, 'identical', TRUE, %s, %s)
                    RETURNING id""",
-                (req.rayna_option_id, req.competitor_option_id, now),
+                (req.rayna_option_id, req.competitor_option_id, now, user["id"]),
             )
             mapping_id = cur.fetchone()["id"]
+
+        auth.audit(
+            c, user, "mapping.create", "mapping", mapping_id,
+            after={
+                "rayna_option_id": req.rayna_option_id,
+                "competitor_option_id": req.competitor_option_id,
+                "product_id": rayna["rayna_product_id"],
+            },
+            ip=deps.client_ip(request),
+        )
         c.commit()
 
         return ManualMapResponse(
@@ -966,7 +1034,11 @@ def create_manual_mapping(req: ManualMapRequest) -> ManualMapResponse:
 
 
 @app.post("/api/mappings/from-url", response_model=AddByUrlResponse, status_code=201)
-def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
+def create_mapping_from_url(
+    req: AddByUrlRequest,
+    request: Request,
+    user: dict[str, Any] = Depends(require("competitor.add_url")),
+) -> AddByUrlResponse:
     """Paste-a-URL flow.
 
     Fetches (or accepts pasted text for) a seller PDP, extracts one option
@@ -998,6 +1070,9 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
         ).fetchone()
         if not rayna:
             raise HTTPException(status_code=404, detail="Rayna option not found")
+
+        # Checked before any network or Claude spend, not after.
+        assert_product_in_scope(c, user, rayna["rayna_product_id"])
 
         # 2. Seller domain from URL
         seller_domain = add_by_url.normalize_seller_domain(req.url)
@@ -1137,13 +1212,13 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
                     (rayna_product_id, market, seller_domain, seller_name,
                      seed_url, sells_this_product, discovered_at,
                      classified_as, classifier_confidence, classifier_reason,
-                     classified_at)
+                     classified_at, created_by)
                    VALUES (%s, %s, %s, %s, %s, TRUE, %s, 'sells_this_product', 1.0,
-                           'Manually added via URL paste', %s)
+                           'Manually added via URL paste', %s, %s)
                    RETURNING id""",
                 (
                     rayna["rayna_product_id"], rayna["market"], seller_domain,
-                    seller_domain, req.url, now, now,
+                    seller_domain, req.url, now, now, user["id"],
                 ),
             )
             competitor_id = cur.fetchone()["id"]
@@ -1152,14 +1227,15 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
         cur = c.execute(
             """INSERT INTO competitor_listings
                 (competitor_id, listing_url, title, raw_markdown,
-                 raw_html, scraped_at, scrape_method)
-               VALUES (%s, %s, %s, %s, NULL, %s, 'manual_url')
+                 raw_html, scraped_at, scrape_method, created_by)
+               VALUES (%s, %s, %s, %s, NULL, %s, 'manual_url', %s)
                RETURNING id""",
             (
                 competitor_id, req.url,
                 page_title or (extracted_list[0].name if extracted_list else ""),
                 content[:200000],
                 now,
+                user["id"],
             ),
         )
         listing_id = cur.fetchone()["id"]
@@ -1208,13 +1284,14 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
                     """INSERT INTO mappings
                         (rayna_option_id, competitor_option_id, verdict, confidence,
                          diff_notes, judge_model, human_reviewed, human_verdict,
-                         is_manual, created_at)
-                       VALUES (%s, %s, %s, %s, %s, %s, FALSE, NULL, TRUE, %s)
+                         is_manual, created_at, created_by)
+                       VALUES (%s, %s, %s, %s, %s, %s, FALSE, NULL, TRUE, %s, %s)
                        RETURNING id""",
                     (
                         req.rayna_option_id, opt_id,
                         v.verdict, v.confidence,
                         diff_prefix + v.diff_notes, judge_model, now,
+                        user["id"],
                     ),
                 )
                 mapping_id = cur.fetchone()["id"]
@@ -1232,6 +1309,17 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
                 "is_target": is_target,
             })
 
+        auth.audit(
+            c, user, "competitor.add_url", "listing", listing_id,
+            after={
+                "url": req.url,
+                "seller_domain": seller_domain,
+                "rayna_option_id": req.rayna_option_id,
+                "options_extracted": len(saved_options),
+                "mapping_id": mapping_id,
+            },
+            ip=deps.client_ip(request),
+        )
         c.commit()
 
     # Legacy per-option fields describe the auto-mapped option (or the first
@@ -1256,23 +1344,49 @@ def create_mapping_from_url(req: AddByUrlRequest) -> AddByUrlResponse:
 
 
 @app.delete("/api/mappings/{mapping_id}", status_code=204)
-def delete_mapping(mapping_id: int):
+def delete_mapping(
+    mapping_id: int,
+    request: Request,
+    user: dict[str, Any] = Depends(require("mapping.delete")),
+):
     with conn() as c:
-        row = c.execute("SELECT is_manual FROM mappings WHERE id=%s", (mapping_id,)).fetchone()
+        row = c.execute(
+            """SELECT m.is_manual, m.rayna_option_id, m.competitor_option_id,
+                      ro.rayna_product_id
+               FROM mappings m
+               JOIN options ro ON ro.id = m.rayna_option_id
+               WHERE m.id=%s""",
+            (mapping_id,),
+        ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Mapping not found")
-        if row["is_manual"] != 1:
+        # is_manual is a BOOLEAN now; `!= 1` happened to work because Python
+        # treats True as 1, but the intent is simply "not manual".
+        if not row["is_manual"]:
             raise HTTPException(
                 status_code=403,
-                detail="Refusing to delete an automated (Claude) mapping; only is_manual=1 rows can be deleted via this endpoint.",
+                detail="Refusing to delete an automated (Claude) mapping; only manual rows can be deleted via this endpoint.",
             )
+        assert_product_in_scope(c, user, row["rayna_product_id"])
         c.execute("DELETE FROM mappings WHERE id=%s", (mapping_id,))
+        auth.audit(
+            c, user, "mapping.delete", "mapping", mapping_id,
+            before={
+                "rayna_option_id": row["rayna_option_id"],
+                "competitor_option_id": row["competitor_option_id"],
+            },
+            ip=deps.client_ip(request),
+        )
         c.commit()
         return None
 
 
 @app.delete("/api/competitor-options/{option_id}", status_code=204)
-def delete_competitor_option(option_id: int):
+def delete_competitor_option(
+    option_id: int,
+    request: Request,
+    user: dict[str, Any] = Depends(require("competitor.delete_option")),
+):
     """Remove a single competitor option row. Cascades:
       1. Any mappings that reference it (usually 0 or 1 rows).
       2. The option row itself.
@@ -1283,7 +1397,7 @@ def delete_competitor_option(option_id: int):
     """
     with conn() as c:
         row = c.execute(
-            """SELECT o.id, o.competitor_listing_id, o.source
+            """SELECT o.id, o.name, o.competitor_listing_id, o.source
                FROM options o WHERE o.id=%s""",
             (option_id,),
         ).fetchone()
@@ -1295,6 +1409,12 @@ def delete_competitor_option(option_id: int):
                 detail="This endpoint only deletes competitor options; Rayna options are catalog data.",
             )
         listing_id = row["competitor_listing_id"]
+        assert_option_in_scope(c, user, option_id)
+        auth.audit(
+            c, user, "competitor.delete_option", "option", option_id,
+            before={"name": row["name"], "listing_id": listing_id},
+            ip=deps.client_ip(request),
+        )
 
         c.execute("DELETE FROM mappings WHERE competitor_option_id=%s", (option_id,))
         c.execute("DELETE FROM price_observations WHERE option_id=%s", (option_id,))
@@ -1312,17 +1432,31 @@ def delete_competitor_option(option_id: int):
 
 
 @app.delete("/api/competitors/{competitor_id}", status_code=204)
-def delete_competitor(competitor_id: int):
+def delete_competitor(
+    competitor_id: int,
+    request: Request,
+    user: dict[str, Any] = Depends(require("competitor.delete_seller")),
+):
     """Wipe an entire seller for one Rayna product. Cascades everything:
     mappings → options → listings → the competitors row itself.
     Use when a whole seller was added by mistake or is no longer relevant.
     Reviewer can re-add later via Add-by-URL."""
     with conn() as c:
         row = c.execute(
-            "SELECT id FROM competitors WHERE id=%s", (competitor_id,)
+            "SELECT id, seller_domain, rayna_product_id FROM competitors WHERE id=%s",
+            (competitor_id,),
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Competitor not found")
+        assert_product_in_scope(c, user, row["rayna_product_id"])
+        auth.audit(
+            c, user, "competitor.delete_seller", "competitor", competitor_id,
+            before={
+                "seller_domain": row["seller_domain"],
+                "rayna_product_id": row["rayna_product_id"],
+            },
+            ip=deps.client_ip(request),
+        )
 
         # 1. mappings whose competitor_option belongs to this seller
         c.execute(
@@ -1377,7 +1511,12 @@ class ReviewDecisionResponse(BaseModel):
     response_model=ReviewDecisionResponse,
     status_code=200,
 )
-def review_mapping(mapping_id: int, req: ReviewDecisionRequest) -> ReviewDecisionResponse:
+def review_mapping(
+    mapping_id: int,
+    req: ReviewDecisionRequest,
+    request: Request,
+    user: dict[str, Any] = Depends(require("review.decide")),
+) -> ReviewDecisionResponse:
     """Resolve a review-queue entry.
 
     ``approve=true`` — set human_reviewed=1 with the existing verdict so the
@@ -1387,10 +1526,15 @@ def review_mapping(mapping_id: int, req: ReviewDecisionRequest) -> ReviewDecisio
     """
     with conn() as c:
         row = c.execute(
-            "SELECT verdict FROM mappings WHERE id=%s", (mapping_id,)
+            """SELECT m.verdict, ro.rayna_product_id
+               FROM mappings m
+               JOIN options ro ON ro.id = m.rayna_option_id
+               WHERE m.id=%s""",
+            (mapping_id,),
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Mapping not found")
+        assert_product_in_scope(c, user, row["rayna_product_id"])
         if req.approve:
             c.execute(
                 """UPDATE mappings
@@ -1403,20 +1547,29 @@ def review_mapping(mapping_id: int, req: ReviewDecisionRequest) -> ReviewDecisio
         else:
             c.execute("DELETE FROM mappings WHERE id=%s", (mapping_id,))
             action = "rejected"
+        auth.audit(
+            c, user, f"review.{action}", "mapping", mapping_id,
+            after={"approve": req.approve, "verdict": row["verdict"]},
+            ip=deps.client_ip(request),
+        )
         c.commit()
         return ReviewDecisionResponse(mapping_id=mapping_id, action=action)
 
 
 @app.get("/api/mapped", response_model=list[MappedItem])
-def mapped_list(date: Optional[str] = None) -> list[MappedItem]:
+def mapped_list(
+    date: Optional[str] = None,
+    user: dict[str, Any] = Depends(require("mapped.view")),
+) -> list[MappedItem]:
     """List all manual mappings. When ``date=YYYY-MM-DD`` is passed, both
     Rayna and competitor prices are swapped with the most recent
     ``price_observations`` entry for that date. Options without an
     observation fall back to the default price (marked ``…_date_price_source
     ='default'``)."""
     with conn() as c:
+        scope_sql, scope_params = auth.scope_predicate(c, user, "p")
         rows = c.execute(
-            """SELECT m.id AS mapping_id, m.created_at,
+            f"""SELECT m.id AS mapping_id, m.created_at,
                       m.verdict, m.confidence, m.diff_notes, m.judge_model,
                       m.is_manual, m.human_reviewed,
                       p.id AS product_id, p.name AS product_name,
@@ -1437,8 +1590,9 @@ def mapped_list(date: Optional[str] = None) -> list[MappedItem]:
                JOIN products p ON p.id = ro.rayna_product_id
                JOIN competitor_listings cl ON cl.id = co.competitor_listing_id
                JOIN competitors c ON c.id = cl.competitor_id
-               WHERE m.is_manual = TRUE
-               ORDER BY m.created_at DESC"""
+               WHERE m.is_manual = TRUE AND {scope_sql}
+               ORDER BY m.created_at DESC""",
+            scope_params,
         ).fetchall()
 
         if not rows:
