@@ -12,6 +12,7 @@ interface Props {
   autoFocus?: boolean;
   minLength?: number;
   hint?: string;
+  placeholder?: string;
   id?: string;
 }
 
@@ -35,6 +36,7 @@ export function PasswordInput({
   autoFocus,
   minLength,
   hint,
+  placeholder,
   id,
 }: Props) {
   const generated = useId();
@@ -57,6 +59,7 @@ export function PasswordInput({
           required={required}
           autoFocus={autoFocus}
           minLength={minLength}
+          placeholder={placeholder}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className="w-full pl-3 pr-10 py-2.5 text-[13.5px] bg-white border border-[#D0D5DD] rounded-[9px] outline-none focus:border-[#EA580C] focus:ring-2 focus:ring-[#FFEDD5] transition"

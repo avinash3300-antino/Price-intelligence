@@ -174,6 +174,12 @@ def revoke_all_sessions(conn, user_id: int) -> None:
 
 
 def purge_expired_sessions(conn) -> int:
+    """Delete sessions past their absolute expiry.
+
+    resolve_session() already refuses an expired session and deletes that one
+    row, but a session nobody returns to is never looked at again and would sit
+    in the table forever. Called from the nightly refresh.
+    """
     cur = conn.execute("DELETE FROM sessions WHERE expires_at < %s", (now_iso(),))
     return cur.rowcount or 0
 

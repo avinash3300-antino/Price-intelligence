@@ -354,6 +354,23 @@ export function MappingEvidenceDrawer({
                   )}
                 </span>
               </MetaRow>
+              <MetaRow label="Mapped by">
+                {item.created_by_email ? (
+                  <span
+                    className="text-[#344054]"
+                    title={item.created_by_email}
+                  >
+                    {item.created_by_name ?? item.created_by_email}
+                  </span>
+                ) : (
+                  <span
+                    className="text-[#98A2B3]"
+                    title="Created before per-user attribution existed, or by an account since deleted"
+                  >
+                    not recorded
+                  </span>
+                )}
+              </MetaRow>
               <MetaRow label="Judged by">
                 <span className="text-[#344054] font-mono text-[11.5px]">
                   {handMapped ? "human reviewer" : item.judge_model ?? "—"}

@@ -71,6 +71,14 @@ export interface AuditEntry {
   after_json: unknown;
 }
 
+export interface DeleteImpact {
+  email: string;
+  mappings: number;
+  competitors: number;
+  listings: number;
+  audit_entries: number;
+}
+
 /** Surfaces the API's own message so the UI can show it verbatim in a toast. */
 export class AdminApiError extends Error {}
 
@@ -157,6 +165,12 @@ export const adminApi = {
 
   deactivate: (id: number) =>
     call<void>(`/api/admin/users/${id}`, { method: "DELETE" }),
+
+  deleteImpact: (id: number) =>
+    call<DeleteImpact>(`/api/admin/users/${id}/delete-impact`),
+
+  deletePermanently: (id: number) =>
+    call<void>(`/api/admin/users/${id}/permanent`, { method: "DELETE" }),
 
   audit: (params: { limit?: number; actor?: string; action?: string } = {}) => {
     const qs = new URLSearchParams();

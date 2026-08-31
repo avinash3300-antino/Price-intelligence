@@ -165,10 +165,32 @@ def to_aed(amount: Optional[float], currency: Optional[str]) -> Optional[float]:
     return round(float(amount) * rate, 4)
 
 
+def _purge_sessions() -> None:
+    """Housekeeping bolted onto the nightly run.
+
+    Expired sessions are refused at resolve time, but rows for sessions nobody
+    returns to would accumulate forever. This is the last step of the nightly
+    chain, so it is the natural place to sweep.
+    """
+    try:
+        from src import auth, db
+        conn = db.get_conn()
+        try:
+            n = auth.purge_expired_sessions(conn)
+            conn.commit()
+            print(f"sessions: purged {n} expired")
+        finally:
+            conn.close()
+    except Exception as e:  # noqa: BLE001
+        # Never let housekeeping fail the refresh it is riding along with.
+        print(f"sessions: purge skipped ({type(e).__name__}: {e})")
+
+
 if __name__ == "__main__":
     # Manual refresh: `python -m src.fx_rates` forces a live pull.
     payload = _fetch_live()
     _write_cache(payload)
+    _purge_sessions()
     print(
         f"fx_rates: refreshed {len(payload['rates_to_aed'])} currencies "
         f"from {payload['source']} at {payload['fetched_at']}"

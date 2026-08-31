@@ -9,6 +9,7 @@ import {
   Plus,
   Search,
   ShieldCheck,
+  Trash2,
   UserX,
   X,
 } from "lucide-react";
@@ -21,6 +22,7 @@ import {
   type AdminUser,
   type AdminUserDetail,
   type CountryMarket,
+  type DeleteImpact,
   type Permission,
   type RoleTemplate,
   type Scope,
@@ -282,6 +284,10 @@ export function AdminUsers({ currentUserId }: { currentUserId: number }) {
             setEditing(u);
             refresh();
           }}
+          onDeleted={() => {
+            setEditing(null);
+            refresh();
+          }}
           onTempPassword={setTempPassword}
         />
       )}
@@ -321,6 +327,7 @@ function UserDrawer({
   currentUserId,
   onClose,
   onChanged,
+  onDeleted,
   onTempPassword,
 }: {
   user: AdminUserDetail;
@@ -330,11 +337,13 @@ function UserDrawer({
   currentUserId: number;
   onClose: () => void;
   onChanged: (u: AdminUserDetail) => void;
+  onDeleted: () => void;
   onTempPassword: (v: { email: string; password: string }) => void;
 }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
-  const [confirm, setConfirm] = useState<null | "deactivate" | "reset">(null);
+  const [confirm, setConfirm] = useState<null | "deactivate" | "reset" | "delete">(null);
+  const [impact, setImpact] = useState<DeleteImpact | null>(null);
 
   const template = templates.find((t) => t.id === user.role_template_id) ?? null;
   const templatePerms = new Set(template?.permissions ?? []);
@@ -418,6 +427,24 @@ function UserDrawer({
           <section>
             <SectionLabel>Account</SectionLabel>
             <div className="space-y-3">
+              <Row label="Name">
+                <input
+                  defaultValue={user.full_name}
+                  disabled={busy}
+                  // Commit on blur rather than per keystroke: one request per
+                  // edit instead of one per character.
+                  onBlur={async (e) => {
+                    const v = e.target.value.trim();
+                    if (!v || v === user.full_name) return;
+                    const updated = await run(
+                      () => adminApi.updateUser(user.id, { full_name: v }),
+                      "Name updated",
+                    );
+                    if (updated) onChanged(updated);
+                  }}
+                  className="py-1.5 px-2.5 text-[12.5px] bg-white border border-[#D0D5DD] rounded-[8px] outline-none focus:border-[#EA580C] focus:ring-2 focus:ring-[#FFEDD5] transition w-[220px] text-right"
+                />
+              </Row>
               <Row label="Role">
                 <select
                   disabled={busy || user.is_owner || isSelf}
@@ -578,6 +605,26 @@ function UserDrawer({
               Deactivate
             </button>
           )}
+          {!user.is_owner && !isSelf && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={async () => {
+                // Fetch the cost first so the dialog can state it rather than
+                // warn in the abstract.
+                try {
+                  setImpact(await adminApi.deleteImpact(user.id));
+                } catch {
+                  setImpact(null);
+                }
+                setConfirm("delete");
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-[8px] text-[12.5px] font-semibold border border-[#FECACA] text-[#B42318] hover:bg-[#FEF2F2] transition disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete
+            </button>
+          )}
           {!user.is_active && (
             <button
               type="button"
@@ -612,6 +659,54 @@ function UserDrawer({
               onTempPassword({ email: user.email, password: res.temporary_password });
               const fresh = await adminApi.user(user.id).catch(() => null);
               if (fresh) onChanged(fresh);
+            }
+          }}
+        />
+      )}
+      {confirm === "delete" && (
+        <ConfirmDialog
+          open
+          danger
+          title="Permanently delete this account?"
+          body={
+            <span className="block space-y-2">
+              <span className="block">
+                <b>{user.email}</b> will be removed entirely. Deactivating
+                instead keeps the account and everything attributed to it.
+              </span>
+              {impact && (impact.mappings + impact.competitors + impact.listings > 0) ? (
+                <span className="block">
+                  Their work stays, but stops being attributed to anyone:{" "}
+                  <b>{impact.mappings}</b> mapping{impact.mappings === 1 ? "" : "s"},{" "}
+                  <b>{impact.competitors}</b> competitor
+                  {impact.competitors === 1 ? "" : "s"} and{" "}
+                  <b>{impact.listings}</b> listing{impact.listings === 1 ? "" : "s"}.
+                </span>
+              ) : (
+                <span className="block">
+                  Nothing is attributed to this account, so no authorship is lost.
+                </span>
+              )}
+              <span className="block">
+                The audit log keeps every action under their email address.
+              </span>
+            </span>
+          }
+          confirmLabel="Delete permanently"
+          onCancel={() => {
+            setConfirm(null);
+            setImpact(null);
+          }}
+          onConfirm={async () => {
+            setConfirm(null);
+            setImpact(null);
+            const ok = await run(
+              () => adminApi.deletePermanently(user.id),
+              "Account deleted",
+            );
+            if (ok !== null) {
+              onClose();
+              onDeleted();
             }
           }}
         />

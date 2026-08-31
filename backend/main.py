@@ -282,6 +282,10 @@ class MappedItem(BaseModel):
     competitor_fingerprint: dict[str, Any] = {}
     # When the seller page was last fetched — drives the staleness hint.
     listing_scraped_at: Optional[str] = None
+    # Who created this link. Null for rows that predate RBAC on a deployment
+    # that never ran the backfill, and for accounts since deleted.
+    created_by_email: Optional[str] = None
+    created_by_name: Optional[str] = None
 
 
 class ReviewItem(BaseModel):
@@ -1590,13 +1594,16 @@ def mapped_list(
                       co.pricing_basis AS competitor_basis,
                       co.fingerprint_json AS competitor_fingerprint_json,
                       c.seller_domain, cl.listing_url,
-                      cl.scraped_at AS listing_scraped_at
+                      cl.scraped_at AS listing_scraped_at,
+                      cu.email AS created_by_email,
+                      cu.full_name AS created_by_name
                FROM mappings m
                JOIN options ro ON ro.id = m.rayna_option_id
                JOIN options co ON co.id = m.competitor_option_id
                JOIN products p ON p.id = ro.rayna_product_id
                JOIN competitor_listings cl ON cl.id = co.competitor_listing_id
                JOIN competitors c ON c.id = cl.competitor_id
+               LEFT JOIN users cu ON cu.id = m.created_by
                WHERE m.is_manual = TRUE AND {scope_sql}
                ORDER BY m.created_at DESC""",
             scope_params,

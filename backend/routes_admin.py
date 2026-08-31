@@ -473,6 +473,94 @@ def reset_password(user_id: int, request: Request,
     return ResetPasswordResponse(temporary_password=password)
 
 
+class DeleteImpactResponse(BaseModel):
+    """What permanently deleting this account would cost."""
+    email: str
+    mappings: int
+    competitors: int
+    listings: int
+    audit_entries: int
+
+
+@router.get("/users/{user_id}/delete-impact", response_model=DeleteImpactResponse)
+def delete_impact(user_id: int, admin: dict = Depends(require_admin)):
+    """Count the work attributed to this account.
+
+    The UI shows this before offering permanent deletion, so the decision is
+    made knowing what authorship is about to be lost rather than after.
+    """
+    with conn() as c:
+        target = _load_user(c, user_id)
+        def n(sql: str) -> int:
+            return next(iter(c.execute(sql, (user_id,)).fetchone().values()))
+        return DeleteImpactResponse(
+            email=target["email"],
+            mappings=n("SELECT COUNT(*) FROM mappings WHERE created_by = %s"),
+            competitors=n("SELECT COUNT(*) FROM competitors WHERE created_by = %s"),
+            listings=n("SELECT COUNT(*) FROM competitor_listings WHERE created_by = %s"),
+            audit_entries=n("SELECT COUNT(*) FROM audit_log WHERE actor_user_id = %s"),
+        )
+
+
+@router.delete("/users/{user_id}/permanent", status_code=204)
+def delete_user_permanently(user_id: int, request: Request,
+                            admin: dict = Depends(require_admin)):
+    """Remove the account row entirely.
+
+    Deactivation is the better answer almost always, and the UI says so. This
+    exists for accounts created in error, or where a record must genuinely be
+    erased.
+
+    What survives: the audit log. actor_email is denormalised, so every action
+    they took is still attributed to the address that took it, including this
+    deletion.
+
+    What is lost: created_by on their mappings, competitors and listings goes
+    NULL. The work itself is untouched — only the record of who produced it.
+    That is the whole reason deactivation is offered first.
+    """
+    with conn() as c:
+        target = _load_user(c, user_id)
+        _guard_owner(target, "deleted")
+        if user_id == admin["id"]:
+            raise HTTPException(
+                status_code=400, detail="You cannot delete your own account."
+            )
+
+        counts = {}
+        for table in ("mappings", "competitors", "competitor_listings"):
+            counts[table] = next(iter(c.execute(
+                f"SELECT COUNT(*) FROM {table} WHERE created_by = %s", (user_id,)
+            ).fetchone().values()))
+
+        # Audited before the row disappears, so the entry can still name what
+        # was removed and what it cost.
+        auth.audit(
+            c, admin, "user.deleted_permanently", "user", user_id,
+            before={
+                "email": target["email"],
+                "full_name": target["full_name"],
+                "role": target["role"],
+                "orphaned_attribution": counts,
+            },
+            ip=client_ip(request),
+        )
+
+        # Release every reference before removing the row. user_scopes,
+        # user_permissions and sessions cascade; these three and the audit log
+        # do not, deliberately — silently cascading a delete into mappings
+        # would destroy real work.
+        for table in ("mappings", "competitors", "competitor_listings"):
+            c.execute(f"UPDATE {table} SET created_by = NULL WHERE created_by = %s",
+                      (user_id,))
+        c.execute("UPDATE audit_log SET actor_user_id = NULL WHERE actor_user_id = %s",
+                  (user_id,))
+        c.execute("UPDATE users SET created_by = NULL WHERE created_by = %s", (user_id,))
+        c.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        c.commit()
+    return None
+
+
 @router.delete("/users/{user_id}", status_code=204)
 def deactivate_user(user_id: int, request: Request,
                     admin: dict = Depends(require_admin)):

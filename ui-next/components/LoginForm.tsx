@@ -74,6 +74,7 @@ export function LoginForm() {
         label="Password"
         value={password}
         onChange={setPassword}
+        placeholder="Enter your password"
         required
       />
 

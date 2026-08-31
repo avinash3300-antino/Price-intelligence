@@ -50,6 +50,7 @@ export function ChangePasswordForm({ forced }: { forced: boolean }) {
         value={current}
         onChange={setCurrent}
         autoComplete="current-password"
+        placeholder={forced ? "The password you were given" : "Your current password"}
         required
         autoFocus
       />
@@ -59,6 +60,7 @@ export function ChangePasswordForm({ forced }: { forced: boolean }) {
         value={next}
         onChange={setNext}
         autoComplete="new-password"
+        placeholder="At least 8 characters"
         required
         minLength={8}
         hint="At least 8 characters. Length matters more than symbols."
@@ -69,6 +71,7 @@ export function ChangePasswordForm({ forced }: { forced: boolean }) {
         value={confirm}
         onChange={setConfirm}
         autoComplete="new-password"
+        placeholder="Type it again"
         required
       />
 
