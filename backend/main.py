@@ -320,6 +320,11 @@ app.add_middleware(
         "http://127.0.0.1:3002",
         "http://localhost:3000",
     ],
+    # Required for the session cookie to survive a cross-origin request.
+    # Local dev goes through the Next rewrite (same origin) and prod goes
+    # through nginx, so this only matters if someone points the browser
+    # straight at the API host.
+    allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )

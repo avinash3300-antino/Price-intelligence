@@ -3,40 +3,69 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { API_BASE_PUBLIC } from "@/lib/api";
+import { API_BASE_PUBLIC, type SessionUser } from "@/lib/api";
+import { UserMenu } from "@/components/UserMenu";
 
 interface NavItem {
   href: string;
   label: string;
   matcher: (path: string) => boolean;
   comingSoon?: boolean;
+  // Tab is only rendered when the signed-in user holds this permission.
+  // Hiding rather than disabling: a tab you can never open is just noise.
+  permission?: string;
+  adminOnly?: boolean;
 }
 
 // Only the tabs the project actually has — the header styling is copied
 // from the v2 mockup (bold active label + orange underline stripe), but
 // no extra Overview/Jobs/Competitors placeholders.
 const NAV: NavItem[] = [
-  { href: "/", label: "Mapping", matcher: (p) => p === "/" },
-  { href: "/mapped", label: "Mapped", matcher: (p) => p === "/mapped" },
+  {
+    href: "/",
+    label: "Mapping",
+    matcher: (p) => p === "/",
+    permission: "mapping.view",
+  },
+  {
+    href: "/mapped",
+    label: "Mapped",
+    matcher: (p) => p === "/mapped",
+    permission: "mapped.view",
+  },
   {
     href: "/comparison",
     label: "Comparison",
     matcher: (p) => p === "/comparison" || p.startsWith("/comparison/"),
+    permission: "comparison.view",
   },
   {
     href: "/review",
     label: "Review",
     matcher: (p) => p === "/review",
+    permission: "review.decide",
+  },
+  {
+    href: "/admin",
+    label: "Admin",
+    matcher: (p) => p.startsWith("/admin"),
+    adminOnly: true,
   },
 ];
 
 export interface TopbarProps {
   title?: string;
   subtitle?: string;
+  user: SessionUser;
 }
 
-export function Topbar(_: TopbarProps) {
+export function Topbar({ user }: TopbarProps) {
   const pathname = usePathname();
+  const visibleNav = NAV.filter((item) => {
+    if (item.adminOnly) return user.role === "admin";
+    if (item.permission) return user.permissions.includes(item.permission);
+    return true;
+  });
   const [crawledLabel, setCrawledLabel] = useState<string | null>(null);
 
   // Cheap "live" heartbeat for the status pill: if /api/health responds OK,
@@ -80,7 +109,7 @@ export function Topbar(_: TopbarProps) {
       </Link>
 
       <nav className="flex items-center h-full">
-        {NAV.map((item) => {
+        {visibleNav.map((item) => {
           const active = item.matcher(pathname);
           const base =
             "inline-flex items-center gap-2 px-[13px] h-full text-[13.5px] transition-colors relative";
@@ -129,9 +158,7 @@ export function Topbar(_: TopbarProps) {
             {crawledLabel}
           </span>
         )}
-        <div className="w-[30px] h-[30px] rounded-full bg-gradient-to-br from-[#F59E0B] to-[#EA580C] text-white flex items-center justify-center text-[12px] font-bold">
-          AK
-        </div>
+        <UserMenu user={user} />
       </div>
     </header>
   );

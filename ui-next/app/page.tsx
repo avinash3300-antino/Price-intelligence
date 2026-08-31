@@ -1,14 +1,16 @@
 import { AppLayout } from "@/components/AppLayout";
 import { MappingView } from "@/components/MappingView";
 import { getDashboard } from "@/lib/api";
+import { requirePermission } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function MappingPage() {
+  const user = await requirePermission("mapping.view");
   const { products } = await getDashboard();
 
   return (
-    <AppLayout
+    <AppLayout user={user}
       title="Mapping workspace"
       subtitle="Country → City → Product → see competitor pricing"
     >

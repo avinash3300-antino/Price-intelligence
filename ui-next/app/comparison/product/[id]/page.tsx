@@ -8,12 +8,14 @@ import {
 } from "@/lib/api";
 import { fmtMoney, fmtBasis, fmtPercent, fmtAED } from "@/lib/format";
 import { notFound } from "next/navigation";
+import { requirePermission } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProductPage(props: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await requirePermission("comparison.view");
   const { id } = await props.params;
   const productId = parseInt(id, 10);
 
@@ -28,7 +30,7 @@ export default async function ProductPage(props: {
   const { product, options } = data;
 
   return (
-    <AppLayout
+    <AppLayout user={user}
       title={product.name}
       subtitle="Option-level comparison against the market"
     >

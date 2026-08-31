@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppLayout } from "@/components/AppLayout";
 import { getMapped } from "@/lib/api";
+import { requirePermission } from "@/lib/session";
 import { MappedDatePill } from "@/components/MappedDatePill";
 import { MappedFilters } from "@/components/MappedFilters";
 
@@ -17,6 +18,7 @@ export default async function MappedPage({
 }: {
   searchParams: SearchParams;
 }) {
+  const user = await requirePermission("mapped.view");
   const sp = await searchParams;
   // Default to tomorrow so same-day OTA cutoffs don't skew the gap — matches
   // the Mapping tab default.
@@ -35,7 +37,7 @@ export default async function MappedPage({
   });
 
   return (
-    <AppLayout>
+    <AppLayout user={user}>
       <div className="max-w-[1480px] mx-auto px-8 py-7 w-full">
         <div className="mb-6 flex items-end justify-between gap-4 flex-wrap">
           <div>

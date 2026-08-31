@@ -1,14 +1,16 @@
 import { AppLayout } from "@/components/AppLayout";
 import { ReviewQueueTable } from "@/components/ReviewQueueTable";
 import { getReviewQueue } from "@/lib/api";
+import { requirePermission } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReviewPage() {
+  const user = await requirePermission("review.decide");
   const queue = await getReviewQueue();
 
   return (
-    <AppLayout
+    <AppLayout user={user}
       title="Mapping review"
       subtitle="Confirm or correct AI-proposed competitor matches"
     >

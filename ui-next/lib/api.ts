@@ -13,13 +13,85 @@ const API_BASE =
     ? process.env.API_URL_INTERNAL ?? "http://localhost:8001"
     : process.env.NEXT_PUBLIC_API_URL ?? "";
 
+/** Thrown when the API rejects the session. Pages catch this and redirect. */
+export class UnauthenticatedError extends Error {
+  constructor(public readonly path: string) {
+    super(`Not signed in (${path})`);
+    this.name = "UnauthenticatedError";
+  }
+}
+
+/** Thrown when signed in but lacking the permission for this endpoint. */
+export class ForbiddenError extends Error {
+  constructor(public readonly path: string, public readonly detail: string) {
+    super(detail || `Forbidden (${path})`);
+    this.name = "ForbiddenError";
+  }
+}
+
+/**
+ * Forward the caller's session cookie on server-side fetches.
+ *
+ * Server components run in Node and get their own fetch, with no browser to
+ * attach cookies — so the incoming request's cookies have to be copied across
+ * by hand or every SSR call arrives unauthenticated. `next/headers` is
+ * imported dynamically because this module is also pulled into the client
+ * bundle, where that import does not exist.
+ */
+async function serverCookieHeader(): Promise<Record<string, string>> {
+  if (typeof window !== "undefined") return {};
+  try {
+    const { cookies } = await import("next/headers");
+    const jar = await cookies();
+    const header = jar.toString();
+    return header ? { cookie: header } : {};
+  } catch {
+    // Called outside a request scope (build-time prerender): nothing to send.
+    return {};
+  }
+}
+
 async function api<T>(path: string): Promise<T> {
-  const r = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
+  const r = await fetch(`${API_BASE}${path}`, {
+    cache: "no-store",
+    headers: await serverCookieHeader(),
+    credentials: "include",
+  });
+  if (r.status === 401) throw new UnauthenticatedError(path);
+  if (r.status === 403) {
+    let detail = "";
+    try {
+      detail = (await r.json())?.detail ?? "";
+    } catch {
+      /* not JSON */
+    }
+    throw new ForbiddenError(path, detail);
+  }
   if (!r.ok) {
     const body = await r.text().catch(() => "");
     throw new Error(`API ${r.status} on ${path}: ${body.slice(0, 200)}`);
   }
   return r.json() as Promise<T>;
+}
+
+export interface SessionScope {
+  country: string;
+  city: string | null;
+}
+
+export interface SessionUser {
+  id: number;
+  email: string;
+  full_name: string;
+  role: "admin" | "user";
+  is_owner: boolean;
+  must_change_password: boolean;
+  permissions: string[];
+  scopes: SessionScope[];
+}
+
+export function getMe(): Promise<SessionUser> {
+  return api<SessionUser>("/api/auth/me");
 }
 
 // ---------- Types (snake_case to match Python API) ----------

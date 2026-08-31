@@ -37,7 +37,7 @@ SESSION_COOKIE = "mi_session"
 SESSION_IDLE_SECONDS = 8 * 3600
 SESSION_ABSOLUTE_SECONDS = 30 * 86400
 
-MIN_PASSWORD_LENGTH = 10
+MIN_PASSWORD_LENGTH = 8
 
 # Failed logins per email before the account is temporarily refused. Counted
 # in-process — this is a rate limiter, not a security boundary, and resetting

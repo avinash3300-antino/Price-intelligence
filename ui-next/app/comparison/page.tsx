@@ -3,14 +3,16 @@ import { Layers, Trophy, Flag, ArrowRight, Store } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { ComparisonProductsTable } from "@/components/ComparisonProductsTable";
 import { getDashboard, type PipelineStats, type DashboardStat } from "@/lib/api";
+import { requirePermission } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function ComparisonPage() {
+  const user = await requirePermission("comparison.view");
   const { products: stats, pipeline } = await getDashboard();
 
   return (
-    <AppLayout
+    <AppLayout user={user}
       title="Portfolio overview"
       subtitle="Where we stand on price across the catalogue"
     >

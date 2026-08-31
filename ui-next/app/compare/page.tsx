@@ -9,6 +9,7 @@ import {
   type CompetitorOptionForMapping,
 } from "@/lib/api";
 import { fmtBasis, fmtField, fmtMoney } from "@/lib/format";
+import { requirePermission } from "@/lib/session";
 import {
   FIELDS,
   VENDOR_KEYS,
@@ -35,6 +36,7 @@ export default async function ComparePage({
 }: {
   searchParams: SearchParams;
 }) {
+  const user = await requirePermission("mapping.view");
   const sp = await searchParams;
   const productId = sp.productId ? parseInt(sp.productId, 10) : NaN;
   const raynaOptionId = sp.raynaOptionId ? parseInt(sp.raynaOptionId, 10) : NaN;
@@ -102,7 +104,7 @@ export default async function ComparePage({
   );
 
   return (
-    <AppLayout
+    <AppLayout user={user}
       title="Compare"
       subtitle={`${workspace.product.name} · Rayna vs ${sellerDomain}`}
     >
