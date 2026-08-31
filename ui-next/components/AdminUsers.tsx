@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { MarketPicker } from "@/components/MarketPicker";
 import {
   AdminApiError,
   adminApi,
@@ -372,20 +373,6 @@ function UserDrawer({
     if (updated) onChanged(updated);
   }
 
-  async function toggleScope(country: string, city: string | null) {
-    const exists = user.scopes.some((s) => s.country === country && s.city === city);
-    let next = exists
-      ? user.scopes.filter((s) => !(s.country === country && s.city === city))
-      : [...user.scopes, { country, city }];
-    // Granting a whole country supersedes its individual cities; keeping both
-    // would be redundant and read as if the cities were a further restriction.
-    if (!exists && city === null) {
-      next = next.filter((s) => s.country !== country || s.city === null);
-    }
-    const updated = await run(() => adminApi.setScopes(user.id, next), "Markets updated");
-    if (updated) onChanged(updated);
-  }
-
   const byCategory = useMemo(() => {
     const groups = new Map<string, Permission[]>();
     for (const p of permissions) {
@@ -553,57 +540,18 @@ function UserDrawer({
                     No markets assigned — this user currently sees nothing at all.
                   </div>
                 )}
-                <div className="border border-[#E4E7EC] rounded-[10px] divide-y divide-[#F2F4F7] max-h-[320px] overflow-y-auto">
-                  {markets.map((m) => {
-                    const wholeCountry = user.scopes.some(
-                      (s) => s.country === m.country && s.city === null,
+                <MarketPicker
+                  markets={markets}
+                  selected={user.scopes}
+                  disabled={busy}
+                  onChange={async (next) => {
+                    const updated = await run(
+                      () => adminApi.setScopes(user.id, next),
+                      "Markets updated",
                     );
-                    return (
-                      <div key={m.country} className="px-3.5 py-2.5">
-                        <label className="flex items-center gap-2.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={wholeCountry}
-                            disabled={busy}
-                            onChange={() => toggleScope(m.country, null)}
-                            className="accent-[#EA580C] w-3.5 h-3.5"
-                          />
-                          <span className="text-[12.5px] font-semibold text-[#101828]">
-                            {m.country}
-                          </span>
-                          <span className="text-[11px] text-[#98A2B3] tnum">
-                            {m.products} products · all cities
-                          </span>
-                        </label>
-                        {!wholeCountry && m.cities.length > 0 && (
-                          <div className="mt-1.5 ml-6 flex flex-wrap gap-1.5">
-                            {m.cities.map((city) => {
-                              const on = user.scopes.some(
-                                (s) => s.country === m.country && s.city === city.city,
-                              );
-                              return (
-                                <button
-                                  key={city.city}
-                                  type="button"
-                                  disabled={busy}
-                                  onClick={() => toggleScope(m.country, city.city)}
-                                  className={`inline-flex items-center gap-1 px-2 py-[3px] rounded-full text-[11px] font-medium border transition ${
-                                    on
-                                      ? "bg-[#FFF4ED] border-[#FED7AA] text-[#C2410C]"
-                                      : "bg-white border-[#E4E7EC] text-[#667085] hover:border-[#D0D5DD]"
-                                  }`}
-                                >
-                                  {on && <Check className="w-3 h-3" />}
-                                  {city.city}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                    if (updated) onChanged(updated);
+                  }}
+                />
               </>
             )}
           </section>
@@ -789,31 +737,14 @@ function CreateUserModal({
           {role === "user" && (
             <div>
               <label className={label}>Markets</label>
-              <div className="border border-[#E4E7EC] rounded-[9px] max-h-[200px] overflow-y-auto divide-y divide-[#F2F4F7]">
-                {markets.map((m) => {
-                  const on = scopes.some((s) => s.country === m.country && s.city === null);
-                  return (
-                    <label key={m.country} className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-[#F9FAFB]">
-                      <input
-                        type="checkbox"
-                        checked={on}
-                        onChange={() =>
-                          setScopes((xs) =>
-                            on
-                              ? xs.filter((s) => s.country !== m.country)
-                              : [...xs, { country: m.country, city: null }],
-                          )
-                        }
-                        className="accent-[#EA580C] w-3.5 h-3.5"
-                      />
-                      <span className="text-[12.5px] text-[#101828]">{m.country}</span>
-                      <span className="text-[11px] text-[#98A2B3] tnum ml-auto">{m.products}</span>
-                    </label>
-                  );
-                })}
-              </div>
+              <MarketPicker
+                markets={markets}
+                selected={scopes}
+                onChange={setScopes}
+                maxHeight="220px"
+              />
               <p className="text-[11px] text-[#98A2B3] mt-1.5">
-                Whole countries here; narrow to specific cities after creating them.
+                Tick a country for all its cities, or pick individual cities.
                 No markets means they see nothing.
               </p>
             </div>
