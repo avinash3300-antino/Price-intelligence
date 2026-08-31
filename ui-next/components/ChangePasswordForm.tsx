@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AlertCircle, KeyRound, Loader2 } from "lucide-react";
+import { PasswordInput } from "@/components/PasswordInput";
 
 export function ChangePasswordForm({ forced }: { forced: boolean }) {
   const [current, setCurrent] = useState("");
@@ -41,59 +42,35 @@ export function ChangePasswordForm({ forced }: { forced: boolean }) {
     window.location.href = "/";
   }
 
-  const field =
-    "w-full px-3 py-2.5 text-[13.5px] bg-white border border-[#D0D5DD] rounded-[9px] outline-none focus:border-[#EA580C] focus:ring-2 focus:ring-[#FFEDD5] transition";
-  const label = "block text-[12px] font-semibold text-[#344054] mb-1.5";
-
   return (
     <form onSubmit={submit} className="space-y-4">
-      <div>
-        <label htmlFor="cur" className={label}>
-          {forced ? "Temporary password" : "Current password"}
-        </label>
-        <input
-          id="cur"
-          type="password"
-          autoComplete="current-password"
-          required
-          autoFocus
-          value={current}
-          onChange={(e) => setCurrent(e.target.value)}
-          className={field}
-        />
-      </div>
-      <div>
-        <label htmlFor="new" className={label}>
-          New password
-        </label>
-        <input
-          id="new"
-          type="password"
-          autoComplete="new-password"
-          required
-          minLength={8}
-          value={next}
-          onChange={(e) => setNext(e.target.value)}
-          className={field}
-        />
-        <p className="text-[11px] text-[#98A2B3] mt-1.5">
-          At least 8 characters. Length matters more than symbols.
-        </p>
-      </div>
-      <div>
-        <label htmlFor="confirm" className={label}>
-          Confirm new password
-        </label>
-        <input
-          id="confirm"
-          type="password"
-          autoComplete="new-password"
-          required
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          className={field}
-        />
-      </div>
+      <PasswordInput
+        id="cur"
+        label={forced ? "Temporary password" : "Current password"}
+        value={current}
+        onChange={setCurrent}
+        autoComplete="current-password"
+        required
+        autoFocus
+      />
+      <PasswordInput
+        id="new"
+        label="New password"
+        value={next}
+        onChange={setNext}
+        autoComplete="new-password"
+        required
+        minLength={8}
+        hint="At least 8 characters. Length matters more than symbols."
+      />
+      <PasswordInput
+        id="confirm"
+        label="Confirm new password"
+        value={confirm}
+        onChange={setConfirm}
+        autoComplete="new-password"
+        required
+      />
 
       {error && (
         <div
