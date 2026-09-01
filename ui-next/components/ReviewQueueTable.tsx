@@ -16,6 +16,7 @@ import {
 import { API_BASE_PUBLIC, type ReviewItem } from "@/lib/api";
 import { fmtMoney, fmtBasis, fmtAED } from "@/lib/format";
 import { VerdictBadge } from "@/components/VerdictBadge";
+import { RaynaProductLink } from "@/components/RaynaProductLink";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useToast } from "@/components/Toast";
@@ -372,6 +373,7 @@ export function ReviewQueueTable({ items }: { items: ReviewItem[] }) {
                     title={`Open ${item.product_name} in mapping workspace`}
                   >
                     {item.product_name}
+                    <RaynaProductLink url={item.product_url} name={item.product_name} className="ml-1.5 align-middle" />
                   </Link>
                   <div className="min-w-0">
                     <div className="text-[12.5px] text-[#101828] line-clamp-2 leading-snug">

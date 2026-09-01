@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, ExternalLink, MapPin } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { CompetitorCard } from "@/components/CompetitorCard";
+import { RaynaProductLink } from "@/components/RaynaProductLink";
 import {
   getProductComparison,
   type RaynaOptionWithMappings,
@@ -48,8 +49,9 @@ export default async function ProductPage(props: {
             🌆
           </div>
           <div className="flex-1">
-            <h1 className="text-[22px] font-semibold tracking-[-0.02em] mb-1">
+            <h1 className="text-[22px] font-semibold tracking-[-0.02em] mb-1 flex items-center gap-2">
               {product.name}
+              <RaynaProductLink url={product.url} name={product.name} size="md" />
             </h1>
             <div className="flex items-center gap-3.5 text-[12.5px] text-[#667085]">
               <span className="inline-flex items-center gap-1">

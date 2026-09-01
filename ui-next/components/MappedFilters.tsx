@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Award, ChevronLeft, ChevronRight, ExternalLink, Layers, Search, TrendingDown, TrendingUp, X } from "lucide-react";
 import { UnmapButton } from "@/components/UnmapButton";
+import { RaynaProductLink } from "@/components/RaynaProductLink";
 import { MappingEvidenceDrawer } from "@/components/MappingEvidenceDrawer";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { fmtMoney, fmtBasis, fmtAED, toAED } from "@/lib/format";
@@ -735,6 +736,7 @@ function OptionCard({
           </div>
           <div className="text-[11.5px] text-[#667085] mt-1 flex items-center gap-1.5 flex-wrap">
             <span className="truncate">{header.product_name}</span>
+            <RaynaProductLink url={header.product_url} name={header.product_name} />
             <span className="text-[#D0D5DD]">·</span>
             <span className="font-mono">{fmtBasis(header.rayna_basis)}</span>
             <span className="text-[#D0D5DD]">·</span>

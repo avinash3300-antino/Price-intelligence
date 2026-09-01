@@ -293,6 +293,7 @@ export interface ReviewItem {
   mapping_id: number;
   product_id: number;
   product_name: string;
+  product_url: string | null;
   product_country: string | null;
   product_city: string | null;
   rayna_option_id: number | null;

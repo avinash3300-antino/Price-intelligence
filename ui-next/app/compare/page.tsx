@@ -4,6 +4,7 @@ import { ArrowLeft, ExternalLink, Info, MapPin, ArrowLeftRight } from "lucide-re
 import { AppLayout } from "@/components/AppLayout";
 import { CompareActionBar } from "@/components/CompareActionBar";
 import { PriceGap } from "@/components/PriceGap";
+import { RaynaProductLink } from "@/components/RaynaProductLink";
 import {
   getMappingWorkspace,
   type CompetitorOptionForMapping,
@@ -136,8 +137,13 @@ export default async function ComparePage({
             <ArrowLeftRight className="w-6 h-6" />
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-[22px] font-semibold tracking-[-0.02em] mb-1">
+            <h1 className="text-[22px] font-semibold tracking-[-0.02em] mb-1 flex items-center gap-2">
               {workspace.product.name}
+              <RaynaProductLink
+                url={workspace.product.url}
+                name={workspace.product.name}
+                size="md"
+              />
             </h1>
             <div className="text-[12.5px] text-[#667085]">
               Side-by-side comparison of one Rayna option vs one competitor option

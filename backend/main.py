@@ -295,6 +295,7 @@ class ReviewItem(BaseModel):
     mapping_id: int
     product_id: int
     product_name: str
+    product_url: Optional[str] = None
     product_country: Optional[str] = None
     product_city: Optional[str] = None
     rayna_option_id: Optional[int] = None
@@ -636,6 +637,7 @@ def review_queue(
         rows = c.execute(
             f"""SELECT m.id AS mapping_id, m.verdict, m.confidence, m.diff_notes,
                       p.id AS product_id, p.name AS product_name,
+                      p.url AS product_url,
                       p.country AS product_country, p.city AS product_city,
                       ro.id AS rayna_option_id,
                       ro.name AS rayna_option_name, ro.price AS rayna_price,

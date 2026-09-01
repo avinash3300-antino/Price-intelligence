@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, Search, X } from "lucide-react";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { RaynaProductLink } from "@/components/RaynaProductLink";
 import type { DashboardStat } from "@/lib/api";
 import { fmtPercent, fmtAED } from "@/lib/format";
 
@@ -349,6 +350,7 @@ export function ComparisonProductsTable({ stats }: { stats: DashboardStat[] }) {
                 <div className="min-w-0">
                   <div className="text-[13.5px] font-semibold text-[#101828] truncate">
                     {s.product.name}
+                    <RaynaProductLink url={s.product.url} name={s.product.name} className="ml-1.5 align-middle" />
                   </div>
                   <div className="text-[11.5px] text-[#98A2B3] truncate">
                     {s.product.type ?? "Activities"}
