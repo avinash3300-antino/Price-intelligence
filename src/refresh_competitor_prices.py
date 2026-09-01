@@ -36,6 +36,7 @@ import re
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from difflib import SequenceMatcher
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -53,12 +54,69 @@ def _now() -> str:
 
 
 def _norm(name: str) -> str:
-    """Loose key for matching an extracted option back to a stored row.
-
-    Names come from Claude and are stable while the page is, but casing and
-    punctuation drift. Everything non-alphanumeric collapses to a space.
-    """
+    """Lowercased, alphanumeric-only form of an option name."""
     return re.sub(r"[^a-z0-9]+", " ", (name or "").lower()).strip()
+
+
+# Words that appear in most option names and so carry no discriminating
+# signal. Left in the comparison they inflate every score toward each other.
+_NOISE = {
+    "per", "adult", "ticket", "tickets", "the", "and", "with", "for", "a", "an",
+    "of", "to", "at", "in", "from", "on", "or", "plus", "combo", "option",
+    "entry", "access", "pass", "tour", "experience", "dubai",
+}
+
+
+def _tokens(name: str) -> set[str]:
+    return {t for t in _norm(name).split() if t not in _NOISE and len(t) > 1}
+
+
+def _similarity(a: str, b: str) -> float:
+    """0..1 similarity between two option names.
+
+    Claude does not name options identically across extractions — the same
+    Burj Khalifa package came back as a different string on the second run,
+    which is what made exact matching flag 71 of 166 live options as missing.
+
+    Token containment rather than plain overlap: one side is often a longer
+    phrasing of the other ("Silver - At the Top Levels 124 & 125" vs "At the
+    Top Levels 124 and 125 Silver"), and containment scores that as the near
+    match it is. Falls back to sequence similarity when either side has no
+    distinctive tokens left after noise removal.
+    """
+    ta, tb = _tokens(a), _tokens(b)
+    if ta and tb:
+        overlap = len(ta & tb)
+        containment = overlap / min(len(ta), len(tb))
+        jaccard = overlap / len(ta | tb)
+        # Weighted toward containment, with Jaccard holding it back when one
+        # name is much longer and merely happens to contain the other's words.
+        return 0.7 * containment + 0.3 * jaccard
+    return SequenceMatcher(None, _norm(a), _norm(b)).ratio()
+
+
+# Below this, two names are treated as different options rather than the same
+# one renamed. Chosen so a genuine rename still matches while two distinct
+# packages on the same page (Silver vs Gold vs Platinum) do not collapse.
+_MATCH_THRESHOLD = 0.55
+
+
+def _best_match(stored_name: str, candidates: list[Any], used: set[int]):
+    """Closest unused extracted option to a stored one, or None.
+
+    Greedy and one-to-one: each extracted option can claim at most one stored
+    row, so two similar packages cannot both match the same candidate.
+    """
+    best, best_score, best_idx = None, 0.0, -1
+    for i, cand in enumerate(candidates):
+        if i in used:
+            continue
+        score = _similarity(stored_name, cand.name)
+        if score > best_score:
+            best, best_score, best_idx = cand, score, i
+    if best is not None and best_score >= _MATCH_THRESHOLD:
+        return best, best_idx, best_score
+    return None, -1, best_score
 
 
 def _content_hash(text: str) -> str:
@@ -178,8 +236,6 @@ def _process(listing: dict[str, Any], force: bool) -> dict[str, Any]:
         result["error"] = f"extract failed: {type(e).__name__}: {e}"[:200]
         return result
 
-    by_name = {_norm(o.name): o for o in extracted}
-
     with _db_lock, db.tx() as conn:
         rows = conn.execute(
             """SELECT id, name, price, currency FROM options
@@ -187,8 +243,17 @@ def _process(listing: dict[str, Any], force: bool) -> dict[str, Any]:
             (listing["id"],),
         ).fetchall()
 
-        for row in rows:
-            match = by_name.get(_norm(row["name"]))
+        used: set[int] = set()
+        # Exact normalised matches first, so a perfect match is never stolen by
+        # a fuzzy one processed earlier.
+        ordered = sorted(
+            rows,
+            key=lambda r: 0 if any(_norm(r["name"]) == _norm(o.name) for o in extracted) else 1,
+        )
+        for row in ordered:
+            match, idx, score = _best_match(row["name"], extracted, used)
+            if match is not None:
+                used.add(idx)
             if match is None:
                 # Kept, not deleted — see the module docstring. last_seen_at
                 # stays behind last_checked_at, which is the flag.
