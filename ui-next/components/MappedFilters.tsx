@@ -776,9 +776,9 @@ function OptionCard({
             <div
               key={m.mapping_id}
               onClick={() => onInspect(m)}
-              className="group grid grid-cols-[minmax(180px,1.5fr)_1fr_0.9fr_140px_70px] gap-3 px-5 py-3 hover:bg-[#F9FAFB] transition-colors items-center border-t border-[#F2F4F7] first:border-t-0 cursor-pointer"
+              className="group grid grid-cols-[minmax(220px,2fr)_1fr_0.9fr_140px_70px] gap-3 px-5 py-3 hover:bg-[#F9FAFB] transition-colors items-center border-t border-[#F2F4F7] first:border-t-0 cursor-pointer"
             >
-              <div className="inline-flex items-center gap-2 min-w-0">
+              <div className="flex items-start gap-2 min-w-0">
                 <button
                   type="button"
                   onClick={(e) => {
@@ -786,13 +786,24 @@ function OptionCard({
                     onInspect(m);
                   }}
                   title={`Why is this a match? — Rayna vs ${m.seller_domain}`}
-                  className="inline-flex items-center gap-2 min-w-0 text-left rounded-[7px] outline-none focus-visible:ring-2 focus-visible:ring-[#FDBA74]"
+                  className="flex items-start gap-2 min-w-0 text-left rounded-[7px] outline-none focus-visible:ring-2 focus-visible:ring-[#FDBA74]"
                 >
-                  <span className="w-[26px] h-[26px] rounded-[7px] bg-[#FFF4ED] border border-[#FED7AA] text-[#C2410C] grid place-items-center text-[11px] font-bold shrink-0">
+                  <span className="w-[26px] h-[26px] rounded-[7px] bg-[#FFF4ED] border border-[#FED7AA] text-[#C2410C] grid place-items-center text-[11px] font-bold shrink-0 mt-[1px]">
                     {m.seller_domain[0]?.toUpperCase() || "?"}
                   </span>
-                  <span className="text-[13px] font-mono text-[#344054] group-hover:text-[#EA580C] truncate">
-                    {m.seller_domain}
+                  <span className="min-w-0">
+                    <span className="block text-[13px] font-mono text-[#344054] group-hover:text-[#EA580C] truncate">
+                      {m.seller_domain}
+                    </span>
+                    {/* Which option on that seller. The row named who we were
+                        comparing against but never what, so two rows from the
+                        same seller were indistinguishable. */}
+                    <span
+                      className="block text-[11.5px] text-[#667085] leading-snug line-clamp-2"
+                      title={m.competitor_option_name}
+                    >
+                      {m.competitor_option_name}
+                    </span>
                   </span>
                 </button>
                 {/* Opening the seller page is the secondary action — the row
