@@ -20,7 +20,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from src import config, db, feed_cache
+from src import config, db, feed_cache, rayna_content
 
 # legacy options have sequence-assigned ids starting at 1. Any id below this is
 # considered legacy and migratable. New variant IDs are >= this.
@@ -153,7 +153,22 @@ def sync() -> dict[str, Any]:
         # ------------------------------------------------------------------
         # 2. Upsert all variants as `options` rows. ON CONFLICT DO UPDATE
         #    keeps re-runs idempotent and refreshes prices/names.
+        #
+        #    The variant rows the feed returns carry only eight fingerprint
+        #    fields, against eighteen on a Claude-extracted competitor option,
+        #    which left our own column blank on the comparison page. The rest
+        #    of the detail is in the feed at product level, so it is merged in
+        #    here from products.raw_json — one read per product, reused across
+        #    its variants.
         # ------------------------------------------------------------------
+        product_raw: dict[int, dict[str, Any]] = {}
+        for r in conn.execute("SELECT id, raw_json FROM products"):
+            try:
+                product_raw[r["id"]] = json.loads(r["raw_json"] or "{}")
+            except (TypeError, ValueError):
+                product_raw[r["id"]] = {}
+
+        enriched_count = 0
         upserts = 0
         for v in variants:
             conn.execute(
@@ -184,11 +199,19 @@ def sync() -> dict[str, Any]:
                     v["price"],
                     v["currency"],
                     config.PILOT_MARKET,
-                    json.dumps(v["fingerprint"], ensure_ascii=False),
+                    json.dumps(
+                        rayna_content.merge_into(
+                            v["fingerprint"],
+                            product_raw.get(int(v["product_id"]), {}),
+                        ),
+                        ensure_ascii=False,
+                    ),
                     now,
                 ),
             )
             upserts += 1
+            if product_raw.get(int(v["product_id"]), {}).get("content_inclusions"):
+                enriched_count += 1
 
         # ------------------------------------------------------------------
         # 3. Re-point mappings to new synthetic IDs (only those that have a
@@ -346,6 +369,7 @@ def sync() -> dict[str, Any]:
         "migration_map_size": len(migration),
         "unmapped_legacy_options": len(unmapped),
         "options_upserted": upserts,
+        "options_enriched_from_product_content": enriched_count,
         "mappings_repointed": mappings_repointed,
         "mappings_dropped_no_match": mappings_dropped,
         "mappings_dropped_unique_dupe": unique_skipped,

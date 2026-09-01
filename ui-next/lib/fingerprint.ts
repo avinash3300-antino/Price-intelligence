@@ -73,6 +73,8 @@ export const FIELDS: FieldRow[] = [
 ];
 
 export const VENDOR_KEYS = new Set([
+  // Provenance flag set by src/rayna_content.py, not a field to compare.
+  "content_scope",
   "vendor",
   "gt_product_id",
   "headout_variant_id",

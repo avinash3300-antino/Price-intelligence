@@ -151,6 +151,19 @@ export default async function ComparePage({
           </div>
         </div>
 
+        {raynaFp.content_scope === "product" && (
+          <div className="mb-5 border border-[#E4E7EC] bg-[#F9FAFB] px-4 py-3 flex items-start gap-2.5">
+            <Info className="w-4 h-4 text-[#667085] mt-0.5 shrink-0" />
+            <div className="text-[12.5px] text-[#475467] leading-snug">
+              <span className="font-semibold">Rayna detail is product-wide.</span>{" "}
+              Highlights, inclusions, exclusions and languages come from the
+              product page and are shared by every variant of it. Tier,
+              transfer type, duration and cancellation are specific to this
+              option.
+            </div>
+          </div>
+        )}
+
         {compThin && (
           <div className="mb-5  border border-[#EFD8A6] bg-[#FBF1DE] px-4 py-3 flex items-start gap-2.5">
             <Info className="w-4 h-4 text-[#9A6510] mt-0.5 shrink-0" />
