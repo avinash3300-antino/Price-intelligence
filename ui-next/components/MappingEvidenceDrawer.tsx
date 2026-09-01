@@ -376,6 +376,19 @@ export function MappingEvidenceDrawer({
                   {handMapped ? "human reviewer" : item.judge_model ?? "—"}
                 </span>
               </MetaRow>
+              {item.product_url && (
+                <MetaRow label="Rayna page">
+                  <a
+                    href={item.product_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-[#EA580C] hover:text-[#C2410C] font-semibold"
+                  >
+                    Open on raynatours.com
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </MetaRow>
+              )}
               <MetaRow label="Listing">
                 <a
                   href={item.listing_url}

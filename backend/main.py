@@ -251,6 +251,9 @@ class MappedItem(BaseModel):
     product_name: str
     product_country: Optional[str] = None
     product_city: Optional[str] = None
+    # Link to the product on raynatours.com, so the drawer can offer both
+    # sides of the comparison rather than only the competitor's page.
+    product_url: Optional[str] = None
     rayna_option_id: int
     rayna_option_name: str
     rayna_price: Optional[float] = None
@@ -1585,6 +1588,7 @@ def mapped_list(
                       m.is_manual, m.human_reviewed,
                       p.id AS product_id, p.name AS product_name,
                       p.country AS product_country, p.city AS product_city,
+                      p.url AS product_url,
                       ro.id AS rayna_option_id, ro.name AS rayna_option_name,
                       ro.price AS rayna_price, ro.currency AS rayna_currency,
                       ro.pricing_basis AS rayna_basis,

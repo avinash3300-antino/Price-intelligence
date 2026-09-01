@@ -1681,9 +1681,26 @@ function WorkspacePanel({
           <div className="text-[11px] font-semibold uppercase tracking-[0.09em] text-[#475467] mb-1.5">
             Comparing
           </div>
-          <h2 className="text-[20px] font-semibold text-[#101828] -tracking-[0.02em] leading-tight">
-            {product.name}
-          </h2>
+          {/* The product title doubles as the link to the live Rayna page, so
+              the option you are pricing can be checked against what the
+              customer actually sees. Falls back to plain text on the handful
+              of catalogue rows with no url. */}
+          {product.url ? (
+            <a
+              href={product.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Open ${product.name} on raynatours.com`}
+              className="group inline-flex items-start gap-1.5 text-[20px] font-semibold text-[#101828] -tracking-[0.02em] leading-tight hover:text-[#EA580C] transition-colors"
+            >
+              <h2>{product.name}</h2>
+              <ExternalLink className="w-4 h-4 mt-[5px] shrink-0 opacity-40 group-hover:opacity-90" />
+            </a>
+          ) : (
+            <h2 className="text-[20px] font-semibold text-[#101828] -tracking-[0.02em] leading-tight">
+              {product.name}
+            </h2>
+          )}
           <div className="text-[12.5px] text-[#667085] mt-1">
             {product.city}, {product.country} · {product.currency}
           </div>
