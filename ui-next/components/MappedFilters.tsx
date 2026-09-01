@@ -836,9 +836,15 @@ function OptionCard({
 
               <GapPill gap={gap} />
 
-              <span className="tnum text-[11px] text-[#98A2B3] whitespace-nowrap text-right">
-                {fmtDate(m.created_at)}
-              </span>
+              {/* When the PRICE was last verified, not when the mapping was
+                  made. Since the nightly refresh started re-checking sellers,
+                  showing the mapping date here read as though a price fetched
+                  today were weeks old. */}
+              <PriceChecked
+                checkedAt={m.competitor_last_checked_at}
+                seenAt={m.competitor_last_seen_at}
+                mappedAt={m.created_at}
+              />
 
               <div
                 className="flex justify-end"
@@ -854,6 +860,52 @@ function OptionCard({
   );
 }
 
+
+/* ---------- Freshness of the competitor price ---------- */
+
+function PriceChecked({
+  checkedAt,
+  seenAt,
+  mappedAt,
+}: {
+  checkedAt: string | null;
+  seenAt: string | null;
+  mappedAt: string;
+}) {
+  // Before the nightly refresh existed a price was only ever as fresh as the
+  // mapping, so that is the honest fallback for rows it has not reached.
+  const when = checkedAt ?? mappedAt;
+  const days = (() => {
+    const t = new Date(when).getTime();
+    return Number.isFinite(t) ? Math.floor((Date.now() - t) / 86_400_000) : null;
+  })();
+  // last_seen behind last_checked means the refresh ran but could not find
+  // this option on the page — so the price shown is the last known one.
+  const missing =
+    !!checkedAt && !!seenAt && new Date(seenAt) < new Date(checkedAt);
+
+  const tone = missing
+    ? "text-[#B54708]"
+    : days == null || days < 2
+      ? "text-[#667085]"
+      : days < 7
+        ? "text-[#98A2B3]"
+        : "text-[#B54708]";
+
+  return (
+    <span
+      className={`tnum text-[11px] whitespace-nowrap text-right ${tone}`}
+      title={
+        missing
+          ? `Last checked ${fmtDate(when)} — this option was not found on the seller's page, so the last known price is shown`
+          : `Price last checked ${fmtDate(when)}`
+      }
+    >
+      {missing && "⚠ "}
+      {days === 0 ? "checked today" : days === 1 ? "checked 1d ago" : days != null ? `checked ${days}d ago` : fmtDate(when)}
+    </span>
+  );
+}
 
 /* ---------- Small pill wrapper for the gap column so it feels less like table text ---------- */
 function GapPill({ gap }: { gap: GapDisplay }) {

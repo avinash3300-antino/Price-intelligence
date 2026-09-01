@@ -285,6 +285,8 @@ export interface MappedItem {
   rayna_fingerprint: Record<string, unknown>;
   competitor_fingerprint: Record<string, unknown>;
   listing_scraped_at: string | null;
+  competitor_last_checked_at: string | null;
+  competitor_last_seen_at: string | null;
   created_by_email: string | null;
   created_by_name: string | null;
 }

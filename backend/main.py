@@ -285,6 +285,11 @@ class MappedItem(BaseModel):
     competitor_fingerprint: dict[str, Any] = {}
     # When the seller page was last fetched — drives the staleness hint.
     listing_scraped_at: Optional[str] = None
+    # When the nightly refresh last verified this competitor price, and when
+    # the option was last actually found on the seller's page. If seen lags
+    # behind checked, the page no longer lists it.
+    competitor_last_checked_at: Optional[str] = None
+    competitor_last_seen_at: Optional[str] = None
     # Who created this link. Null for rows that predate RBAC on a deployment
     # that never ran the backfill, and for accounts since deleted.
     created_by_email: Optional[str] = None
@@ -1599,6 +1604,8 @@ def mapped_list(
                       co.price AS competitor_price, co.currency AS competitor_currency,
                       co.pricing_basis AS competitor_basis,
                       co.fingerprint_json AS competitor_fingerprint_json,
+                      co.last_checked_at AS competitor_last_checked_at,
+                      co.last_seen_at AS competitor_last_seen_at,
                       c.seller_domain, cl.listing_url,
                       cl.scraped_at AS listing_scraped_at,
                       cu.email AS created_by_email,
