@@ -682,12 +682,16 @@ function ProductRow({
       : null;
 
   return (
-    <li>
+    // The Rayna link is a sibling of the button, not inside it: an anchor
+    // nested in a button is invalid markup, and the two do different things —
+    // the row selects the product, the icon leaves the app. Revealed on hover
+    // or keyboard focus so 310 rows do not carry 310 permanent icons.
+    <li className="relative group/row">
       <button
         type="button"
         onClick={onClick}
         disabled={!hasOptions}
-        className={`w-full text-left px-3 py-2.5  transition-colors flex items-start gap-2.5 ${
+        className={`w-full text-left pl-3 pr-8 py-2.5  transition-colors flex items-start gap-2.5 ${
           selected
             ? "bg-white text-[#101828] shadow-sm border-l-[3px] border-[#EA580C]"
             : hasOptions
@@ -758,6 +762,18 @@ function ProductRow({
           </div>
         </div>
       </button>
+      {p.url && (
+        <a
+          href={p.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`Open ${p.name} on raynatours.com`}
+          aria-label={`Open ${p.name} on raynatours.com`}
+          className="absolute right-1.5 top-2 p-1 rounded-[6px] text-[#98A2B3] opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 hover:text-[#EA580C] hover:bg-white outline-none focus-visible:ring-2 focus-visible:ring-[#FDBA74] transition"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+        </a>
+      )}
     </li>
   );
 }
