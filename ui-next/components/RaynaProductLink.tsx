@@ -1,3 +1,5 @@
+"use client";
+
 import { ExternalLink } from "lucide-react";
 
 /**
@@ -35,7 +37,12 @@ export function RaynaProductLink({
       target="_blank"
       rel="noopener noreferrer"
       // Stop the click reaching a clickable row or card underneath: opening
-      // the seller page and selecting the row are different intents.
+      // the Rayna page and selecting the row are different intents.
+      //
+      // This handler is why the file is a client component. Without the
+      // directive it renders fine inside the client-rendered screens but
+      // throws "Event handlers cannot be passed to Client Component props"
+      // on the server-rendered ones (/compare, /comparison/product/[id]).
       onClick={(e) => e.stopPropagation()}
       title={`Open ${name} on raynatours.com`}
       aria-label={`Open ${name} on raynatours.com`}
