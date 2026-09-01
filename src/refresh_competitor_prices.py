@@ -37,7 +37,8 @@ import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from difflib import SequenceMatcher
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from typing import Any, Optional
 
 from src import add_by_url, config, db, fx_rates
@@ -47,6 +48,57 @@ from src import add_by_url, config, db, fx_rates
 DEFAULT_WORKERS = 3
 
 _db_lock = threading.Lock()
+
+# Which query parameter each seller uses to select a travel date.
+#
+# These two are not guesses: both appear in URLs already stored in the
+# database, pinned to dates in the past (headout ?date=2026-08-27, tiqets
+# ?selected_date=2026-08-21). Until now the refresh re-fetched those exact
+# stale dates every run.
+#
+# Sellers absent from this map are fetched on their default page. That is
+# recorded rather than assumed away, so a price for "whatever date the seller
+# showed" is never presented as a price for tomorrow.
+_SELLER_DATE_PARAM: dict[str, str] = {
+    "headout.com": "date",
+    "tiqets.com": "selected_date",
+}
+
+
+def target_date() -> str:
+    """Tomorrow, in the seller's terms.
+
+    The whole app compares on tomorrow — same-day cutoffs and sold-out
+    inventory make today's price a poor baseline, which is why the date pill
+    defaults there. The competitor side has to agree or the gap compares two
+    different days.
+    """
+    return (datetime.now(timezone.utc).date() + timedelta(days=1)).isoformat()
+
+
+def _seller_key(domain: str) -> Optional[str]:
+    """Match a domain against the map, allowing subdomains."""
+    d = (domain or "").lower()
+    for known in _SELLER_DATE_PARAM:
+        if d == known or d.endswith("." + known):
+            return known
+    return None
+
+
+def _with_target_date(url: str, seller_domain: str, date: str) -> tuple[str, bool]:
+    """Point the URL at `date` when the seller's parameter is known.
+
+    Returns (url, date_applied). date_applied=False means the seller was
+    fetched on whatever date its page defaults to.
+    """
+    key = _seller_key(seller_domain)
+    if not key:
+        return url, False
+    param = _SELLER_DATE_PARAM[key]
+    parts = urlparse(url)
+    q = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k != param]
+    q.append((param, date))
+    return urlunparse(parts._replace(query=urlencode(q))), True
 
 
 def _now() -> str:
@@ -143,21 +195,25 @@ def _listings_to_refresh(conn, limit: Optional[int]) -> list[dict[str, Any]]:
     return [dict(r) for r in conn.execute(sql)]
 
 
-def _record_observation(conn, option_id: int, price: float, currency: str) -> None:
-    """Append to price history.
+def _record_observation(conn, option_id: int, price: float, currency: str,
+                        date: str, date_applied: bool) -> None:
+    """Append to price history against the date the price is actually for.
 
-    target_date is today: this is 'the price the seller showed on this date',
-    which is what a trend needs. Rayna's per-date observations mean something
-    different (the price for travel on that date) but share the table.
+    target_date is tomorrow, matching the date the rest of the app compares
+    on, so /mapped?date=<tomorrow> finally finds a real competitor observation
+    instead of falling back to the price captured whenever someone pasted the
+    URL.
+
+    capture_method distinguishes the two cases honestly: a price the seller
+    quoted for that specific date, versus one taken from whatever date the
+    seller's page defaulted to because we do not know its date parameter.
     """
+    method = "competitor-refresh" if date_applied else "competitor-refresh-default-date"
     conn.execute(
         """INSERT INTO price_observations
              (option_id, price, currency, market, target_date, captured_at, capture_method)
-           VALUES (%s, %s, %s, %s, %s, %s, 'competitor-refresh')""",
-        (
-            option_id, price, currency or "AED", config.PILOT_MARKET,
-            datetime.now(timezone.utc).date().isoformat(), _now(),
-        ),
+           VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+        (option_id, price, currency or "AED", config.PILOT_MARKET, date, _now(), method),
     )
 
 
@@ -170,9 +226,11 @@ def _mark_all_seen(conn, listing_id: int, now: str) -> None:
     )
 
 
-def _process(listing: dict[str, Any], force: bool) -> dict[str, Any]:
+def _process(listing: dict[str, Any], force: bool, date: str) -> dict[str, Any]:
     """Fetch, compare, and update one listing. Returns a result summary."""
-    url = listing["listing_url"]
+    url, date_applied = _with_target_date(
+        listing["listing_url"], listing["seller_domain"], date
+    )
     result = {
         "listing_id": listing["id"],
         "seller": listing["seller_domain"],
@@ -181,6 +239,7 @@ def _process(listing: dict[str, Any], force: bool) -> dict[str, Any]:
         "prices_updated": 0,
         "options_seen": 0,
         "options_missing": 0,
+        "date_applied": date_applied,
         "error": None,
     }
 
@@ -223,7 +282,7 @@ def _process(listing: dict[str, Any], force: bool) -> dict[str, Any]:
                      AND price IS NOT NULL""",
                 (listing["id"],),
             ).fetchall():
-                _record_observation(conn, r["id"], r["price"], r["currency"])
+                _record_observation(conn, r["id"], r["price"], r["currency"], date, date_applied)
                 result["options_seen"] += 1
         return result
 
@@ -284,7 +343,7 @@ def _process(listing: dict[str, Any], force: bool) -> dict[str, Any]:
             if price is not None and price != row["price"]:
                 result["prices_updated"] += 1
             if price is not None:
-                _record_observation(conn, row["id"], price, stored_currency or "AED")
+                _record_observation(conn, row["id"], price, stored_currency or "AED", date, date_applied)
 
         conn.execute(
             """UPDATE competitor_listings
@@ -308,8 +367,13 @@ def run(limit: Optional[int] = None, force: bool = False,
     finally:
         conn.close()
 
+    date = target_date()
+    dated = sum(1 for l in listings if _seller_key(l["seller_domain"]))
     print(f"refresh_competitor_prices: {len(listings)} mapped listing(s), "
           f"{workers} worker(s), force={force}")
+    print(f"  target date: {date} (tomorrow) — "
+          f"{dated} listing(s) fetched on that date, "
+          f"{len(listings) - dated} on the seller's default date")
 
     totals = {
         "listings": len(listings), "unchanged": 0, "updated": 0,
@@ -317,7 +381,7 @@ def run(limit: Optional[int] = None, force: bool = False,
         "options_seen": 0, "options_missing": 0,
     }
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futs = {pool.submit(_process, l, force): l for l in listings}
+        futs = {pool.submit(_process, l, force, date): l for l in listings}
         for fut in as_completed(futs):
             l = futs[fut]
             try:
@@ -333,9 +397,10 @@ def run(limit: Optional[int] = None, force: bool = False,
                 "unchanged": "=", "updated": "*", "blocked": "!", "error": "!",
             }.get(r["status"], "?")
             note = f" — {r['error']}" if r["error"] else ""
+            when = "" if r["date_applied"] else " [default date]"
             print(f"  {flag} {r['seller']:<24} {r['status']:<10} "
                   f"seen={r['options_seen']} missing={r['options_missing']} "
-                  f"repriced={r['prices_updated']}{note}")
+                  f"repriced={r['prices_updated']}{when}{note}")
 
     print("\nrefresh_competitor_prices: done")
     for k, v in totals.items():
